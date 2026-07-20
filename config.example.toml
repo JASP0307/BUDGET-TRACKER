@@ -1,0 +1,57 @@
+# Copy this file to config.toml and fill in the real values.
+# config.toml is git-ignored — it holds secrets.
+
+[general]
+# USD -> DOP conversion rate (manual; revisit periodically).
+usd_to_dop = 60.0
+# Only fetch emails newer than this window on each poll (Gmail `newer_than:`).
+fetch_window = "2d"
+
+[gmail]
+# Path to the OAuth client secret downloaded from Google Cloud Console.
+credentials_file = "credentials.json"
+# Where the user token is cached after the first OAuth consent.
+token_file = "token.json"
+
+[sheets]
+# The spreadsheet ID (from its URL) that holds the monthly worksheet.
+spreadsheet_id = "PUT_SPREADSHEET_ID_HERE"
+# Tab that receives one row per transaction.
+transactions_tab = "Transacciones"
+# Tab that holds category -> monthly budget (RD$).
+budget_tab = "Presupuesto"
+
+[telegram]
+bot_token = "PUT_BOTFATHER_TOKEN_HERE"
+chat_id = "PUT_YOUR_CHAT_ID_HERE"
+
+# Merchant substring -> category. First case-insensitive match wins.
+# Unmatched merchants fall back to "Otros / sin categoría" and are flagged.
+[categorize.rules]
+"UBER EATS"          = "Delivery"
+"TACO BELL"          = "Salidas"
+"POLLOS VICTORINA"   = "Salidas"
+"MOCHIZUKI"          = "Salidas"
+"CHANCHO GUSTO"      = "Salidas"
+"GRIEGGO YOGART"     = "Salidas"
+"HELADERIA BON"      = "Salidas"
+"INVERSIONES TAKATA" = "Mantenimiento"
+"GOOGLE"             = "Suscripciones"
+"ANTHROPIC"          = "Suscripciones"
+"SPOTIFY"            = "Suscripciones"
+
+# Monthly budget per category (RD$). Total = 61,000 = income.
+[budget]
+"Renta"                 = 5000
+"Combustible"           = 10000
+"Suscripciones"         = 2150
+"Teléfono"              = 810
+"Diezmo"                = 2000
+"Dinerito de la Dooña"  = 5000
+"Salidas"               = 4000
+"Delivery"              = 600
+"Mantenimiento"         = 1500
+"Retiro Efectivo"       = 1200
+"Otros / sin categoría" = 2000
+"Fondo de Emergencia"   = 10000
+"Ahorros"               = 16740

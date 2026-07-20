@@ -1,0 +1,17 @@
+# Secrets & credentials — never commit
+config.toml
+credentials.json
+token.json
+*.env
+.env
+
+# Local runtime state
+state.json
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
