@@ -7,6 +7,7 @@ token.json
 
 # Local runtime state
 state.json
+*.log
 
 # Python
 .venv/

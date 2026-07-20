@@ -64,13 +64,33 @@ cp config.example.toml config.toml   # then fill in the real values
 ## Run
 
 ```bash
-python -m budgettracker.main          # one polling pass
+python -m budgettracker.main             # one polling pass
+python -m budgettracker.main --dry-run   # fetch + parse + print, no writes
+python -m budgettracker.main --backfill  # log this month's past txns (no Telegram)
 ```
 
-### Cron (home server / Pi) — every 15 minutes
+### Cron — every 15 minutes
+`scripts/run.sh` cd's into the repo, runs from the venv, and prints a timestamped
+header. `flock` stops a slow run from overlapping the next one.
+
 ```cron
-*/15 * * * * cd /path/to/app && .venv/bin/python -m budgettracker.main >> tracker.log 2>&1
+*/15 * * * * /usr/bin/flock -n /tmp/budget-tracker.lock /home/jabner/Documents/SystemTree/SystemTree/20_Projects/budget-tracker/app/scripts/run.sh >> /home/jabner/Documents/SystemTree/SystemTree/20_Projects/budget-tracker/app/tracker.log 2>&1
 ```
+
+Install with `crontab -e` (or `crontab -l | { cat; echo "<line>"; } | crontab -`).
+
+### Running the service on a laptop
+cron does **not** fire while the machine is suspended, so a laptop must be kept
+awake:
+- Ignore the lid switch — in `/etc/systemd/logind.conf` set
+  `HandleLidSwitch=ignore` (and `HandleLidSwitchExternalPower=ignore`), then
+  `sudo systemctl restart systemd-logind`.
+- Disable idle sleep — either in the desktop's power settings, or aggressively:
+  `sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target`.
+- Keep it on AC power.
+
+Missed runs (machine off) self-heal on the next run because `fetch_window` looks
+back 2 days; a longer outage needs a one-off `--backfill`.
 
 ## Tests
 
@@ -84,7 +104,8 @@ Parser tests run against fixtures derived from real notification emails
 
 ## Status
 
-- ✅ Parsers + categorization (tested against real samples)
-- ✅ Gmail fetch, Sheets append/dedupe, Telegram alerts (implemented; need
-  credentials to run end-to-end)
-- ⬜ First live run once Google Cloud + Telegram + Sheet are set up
+- ✅ Parsers + categorization (tested against real emails)
+- ✅ Gmail fetch, Sheets append + dedupe, Telegram alerts — live
+- ✅ Duplicate-notification guard; backfill mode
+- ✅ Running end-to-end (Google Cloud OAuth in Production, Sheet + Telegram set up)
+- ⬜ Cron job installed on the always-on machine
