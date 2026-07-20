@@ -21,14 +21,13 @@ from .sheets import SCOPES, TX_HEADER
 def _gastado_formula(tab: str, row: int) -> str:
     """Month-to-date spend for the category in column A of `row`.
 
-    Dates are stored as ISO text, so LEFT(date, 7) == 'YYYY-MM' selects the
-    current month; column F is category, column G is the signed amount.
+    Google stores the ISO dates in column B as real dates, so we bound by the
+    current month with SUMIFS; column F is category, column G the signed amount.
     """
-    rng = f"'{tab}'!"
     return (
-        f"=SUMPRODUCT(({rng}$F$2:$F$2000=$A{row})"
-        f"*(LEFT({rng}$B$2:$B$2000,7)=TEXT(TODAY(),\"YYYY-MM\"))"
-        f"*{rng}$G$2:$G$2000)"
+        f"=SUMIFS({tab}!$G$2:$G,{tab}!$F$2:$F,$A{row},"
+        f'{tab}!$B$2:$B,">="&DATE(YEAR(TODAY()),MONTH(TODAY()),1),'
+        f'{tab}!$B$2:$B,"<"&(EOMONTH(TODAY(),0)+1))'
     )
 
 
@@ -54,17 +53,33 @@ def build_sheet(config_path: str = "config.toml") -> str:
     ).execute()
 
     # Budget table: Categoría | Presupuesto | Gastado (mes) | Restante.
-    rows = [["Categoría", "Presupuesto (RD$)", "Gastado (mes)", "Restante"]]
-    for i, (cat, amount) in enumerate(cfg.budget.items()):
-        r = i + 2
-        rows.append([cat, amount, _gastado_formula(cfg.transactions_tab, r),
-                     f"=B{r}-C{r}"])
-    total = len(rows)  # header + categories; totals go on the next row
-    rows.append(["TOTAL", f"=SUM(B2:B{total})", f"=SUM(C2:C{total})",
-                 f"=SUM(D2:D{total})"])
+    # Header + the plain (Categoría, Presupuesto) columns go in one block write.
+    cats = list(cfg.budget.items())
+    n = len(cats)
+    last_cat_row = n + 1          # categories occupy rows 2..n+1
+    total_row = n + 2
+    block = [["Categoría", "Presupuesto (RD$)", "Gastado (mes)", "Restante"]]
+    block += [[cat, amount] for cat, amount in cats]
     service.spreadsheets().values().update(
         spreadsheetId=sid, range=f"{cfg.budget_tab}!A1",
-        valueInputOption="USER_ENTERED", body={"values": rows},
+        valueInputOption="USER_ENTERED", body={"values": block},
+    ).execute()
+
+    # Formula cells are written individually: a big A1-anchored array write makes
+    # Google shift even absolute references, but single-cell writes preserve them.
+    data = []
+    for i in range(n):
+        r = i + 2
+        data.append({"range": f"{cfg.budget_tab}!C{r}",
+                     "values": [[_gastado_formula(cfg.transactions_tab, r)]]})
+        data.append({"range": f"{cfg.budget_tab}!D{r}", "values": [[f"=B{r}-C{r}"]]})
+    data.append({"range": f"{cfg.budget_tab}!A{total_row}", "values": [["TOTAL"]]})
+    for col in ("B", "C", "D"):
+        data.append({"range": f"{cfg.budget_tab}!{col}{total_row}",
+                     "values": [[f"=SUM({col}2:{col}{last_cat_row})"]]})
+    service.spreadsheets().values().batchUpdate(
+        spreadsheetId=sid,
+        body={"valueInputOption": "USER_ENTERED", "data": data},
     ).execute()
 
     # Patch config.toml with the real id.

@@ -6,7 +6,7 @@ column tells us which emails were already logged (gmail.readonly can't label).
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timedelta
 
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -52,21 +52,39 @@ def append_transaction(service, spreadsheet_id: str, tab: str, txn: Transaction)
     ).execute()
 
 
+# Google Sheets serial-date epoch.
+_SHEETS_EPOCH = date(1899, 12, 30)
+
+
+def _cell_date(value) -> date | None:
+    """Column B may come back as a Sheets serial (number) or an ISO string."""
+    if isinstance(value, (int, float)):
+        return _SHEETS_EPOCH + timedelta(days=int(value))
+    try:
+        return datetime.strptime(str(value)[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
 def month_to_date_spend(service, spreadsheet_id: str, tab: str, category: str,
                         today: date | None = None) -> float:
-    """Sum signed amounts for `category` within the current month."""
+    """Sum signed amounts for `category` within the current month.
+
+    Reads unformatted values so dates arrive as serials regardless of the
+    sheet's display format (a formatted read is locale-dependent)."""
     today = today or date.today()
-    prefix = today.strftime("%Y-%m")
     resp = service.spreadsheets().values().get(
-        spreadsheetId=spreadsheet_id, range=f"{tab}!A2:I").execute()
+        spreadsheetId=spreadsheet_id, range=f"{tab}!A2:I",
+        valueRenderOption="UNFORMATTED_VALUE").execute()
     total = 0.0
     for row in resp.get("values", []):
         # columns: 0 id, 1 date, 5 category, 6 amount
-        if len(row) < 7:
+        if len(row) < 7 or row[5] != category:
             continue
-        if row[5] == category and str(row[1]).startswith(prefix):
+        d = _cell_date(row[1])
+        if d and d.year == today.year and d.month == today.month:
             try:
                 total += float(row[6])
-            except ValueError:
+            except (ValueError, TypeError):
                 continue
     return total
