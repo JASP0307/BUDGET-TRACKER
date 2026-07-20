@@ -31,6 +31,33 @@ def read_processed_ids(service, spreadsheet_id: str, tab: str) -> set[str]:
     return {row[0] for row in resp.get("values", []) if row}
 
 
+def signature(card: str, txn_date, merchant: str, signed_amount: float) -> tuple:
+    """Content key used to catch duplicate bank notifications (which arrive with
+    different message ids). A reversal has the opposite sign, so it never
+    collides with the original charge."""
+    return (card, txn_date.isoformat(), merchant, round(float(signed_amount), 2))
+
+
+def read_signatures(service, spreadsheet_id: str, tab: str) -> set[tuple]:
+    """Content signatures of all rows already in the sheet."""
+    resp = service.spreadsheets().values().get(
+        spreadsheetId=spreadsheet_id, range=f"{tab}!A2:I",
+        valueRenderOption="UNFORMATTED_VALUE").execute()
+    sigs: set[tuple] = set()
+    for row in resp.get("values", []):
+        if len(row) < 7:
+            continue
+        d = _cell_date(row[1])
+        if d is None:
+            continue
+        try:
+            amount = round(float(row[6]), 2)
+        except (ValueError, TypeError):
+            continue
+        sigs.add((str(row[2]), d.isoformat(), str(row[4]), amount))
+    return sigs
+
+
 def append_transaction(service, spreadsheet_id: str, tab: str, txn: Transaction) -> None:
     row = [
         txn.message_id,

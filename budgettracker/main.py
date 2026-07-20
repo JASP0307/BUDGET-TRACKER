@@ -9,6 +9,7 @@ Flow (see NOTES.md "Proposed pipeline"):
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 from google.auth.transport.requests import Request
@@ -42,19 +43,27 @@ def _credentials(credentials_file: str, token_file: str) -> Credentials:
     return creds
 
 
-def run(config_path: str = "config.toml", *, dry_run: bool = False) -> int:
+def run(config_path: str = "config.toml", *, dry_run: bool = False,
+        backfill: bool = False) -> int:
     cfg = config_mod.load(config_path)
     creds = _credentials(cfg.gmail_credentials_file, cfg.gmail_token_file)
     gmail = build("gmail", "v1", credentials=creds)
-    emails = gmail_client.fetch_candidates(gmail, cfg.fetch_window)
+
+    # Backfill widens the window to reach the 1st of the current month and stays
+    # silent on Telegram; normal runs use the configured (short) window.
+    today = date.today()
+    window = f"{today.day + 1}d" if backfill else cfg.fetch_window
+    emails = gmail_client.fetch_candidates(gmail, window)
 
     if dry_run:
         return _dry_run(cfg, emails)
 
     sheet = sheets.get_service(creds)
     processed = sheets.read_processed_ids(sheet, cfg.spreadsheet_id, cfg.transactions_tab)
+    signatures = sheets.read_signatures(sheet, cfg.spreadsheet_id, cfg.transactions_tab)
 
     logged = 0
+    skipped_dupes = 0
     for email in emails:
         if email.message_id in processed:
             continue
@@ -62,17 +71,33 @@ def run(config_path: str = "config.toml", *, dry_run: bool = False) -> int:
                           email.html, usd_to_dop=cfg.usd_to_dop)
         if txn is None:
             continue
+        # Backfill only fills the current month; older emails in the wide window
+        # are ignored so we don't log partial prior months.
+        if backfill and (txn.txn_date.year != today.year
+                         or txn.txn_date.month != today.month):
+            continue
         txn = categorize(txn, cfg.rules)
 
+        # Guard against duplicate bank notifications (same content, different id).
+        sig = sheets.signature(txn.card, txn.txn_date, txn.merchant, txn.signed_amount())
+        if sig in signatures:
+            skipped_dupes += 1
+            continue
+        signatures.add(sig)
+
         sheets.append_transaction(sheet, cfg.spreadsheet_id, cfg.transactions_tab, txn)
-        spent = sheets.month_to_date_spend(
-            sheet, cfg.spreadsheet_id, cfg.transactions_tab, txn.category)
-        budget = cfg.budget.get(txn.category or "", 0.0)
-        notifier.send(cfg.telegram_bot_token, cfg.telegram_chat_id,
-                      notifier.transaction_message(txn, spent, budget))
+        if not backfill:
+            spent = sheets.month_to_date_spend(
+                sheet, cfg.spreadsheet_id, cfg.transactions_tab, txn.category)
+            budget = cfg.budget.get(txn.category or "", 0.0)
+            notifier.send(cfg.telegram_bot_token, cfg.telegram_chat_id,
+                          notifier.transaction_message(txn, spent, budget))
         logged += 1
 
-    print(f"Processed {len(emails)} email(s), logged {logged} new transaction(s).")
+    mode = "backfilled" if backfill else "logged"
+    dupe_note = f", skipped {skipped_dupes} duplicate(s)" if skipped_dupes else ""
+    print(f"Processed {len(emails)} email(s), {mode} {logged} new transaction(s)"
+          f"{dupe_note}.")
     return logged
 
 
@@ -101,5 +126,7 @@ if __name__ == "__main__":
     p.add_argument("--config", default="config.toml")
     p.add_argument("--dry-run", action="store_true",
                    help="fetch + parse + print only; no Sheet writes or Telegram")
+    p.add_argument("--backfill", action="store_true",
+                   help="log this month's past transactions to the Sheet; no Telegram")
     args = p.parse_args()
-    run(args.config, dry_run=args.dry_run)
+    run(args.config, dry_run=args.dry_run, backfill=args.backfill)
