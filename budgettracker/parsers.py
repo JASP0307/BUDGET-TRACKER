@@ -99,14 +99,19 @@ def _parse_popular(
 
 
 def _popular_data_row(html: str) -> tuple[str, str, str, str, str] | None:
-    """Return the 5 cells of the transaction row: amount, moneda, fecha,
-    comercio/cajero, estatus. The data row is the <tr> whose first cell is a
-    money amount (the header row uses <th>)."""
+    """Return the 5 transaction cells: amount, moneda, fecha, comercio/cajero,
+    estatus.
+
+    Popular's real emails wrap everything in nested `<table><td>` blocks with no
+    `<tr>`, so BeautifulSoup can flatten the whole body into the row's first
+    cell. Rather than assume column 0, find the cell that *is* a money amount and
+    read the five columns starting there."""
     soup = BeautifulSoup(html, "html.parser")
     for tr in soup.find_all("tr"):
         cells = [td.get_text(" ", strip=True) for td in tr.find_all("td")]
-        if len(cells) >= 5 and _MONEY_RE.search(cells[0]):
-            return cells[0], cells[1], cells[2], cells[3], cells[4]
+        for i, cell in enumerate(cells):
+            if _MONEY_RE.fullmatch(cell) and i + 5 <= len(cells):
+                return tuple(cells[i:i + 5])  # type: ignore[return-value]
     return None
 
 

@@ -33,6 +33,18 @@ def test_popular_consumo_rdollar():
     assert txn.signed_amount() == pytest.approx(1089.90)
 
 
+def test_popular_consumo_wrapped_dom():
+    # Real Popular emails nest <table><td> without <tr>, flattening the body into
+    # the row's first cell. The parser must still find the transaction columns.
+    txn = parse_email("m1b", POPULAR, "Notificación de Consumo",
+                      _load("popular_consumo_wrapped.html"), usd_to_dop=RATE)
+    assert txn is not None
+    assert txn.card == "Popular VISA ISI *1111"
+    assert txn.merchant == "SUPERMERCADO EJEMPLO"
+    assert txn.amount_dop == pytest.approx(1089.90)
+    assert txn.txn_date == date(2026, 7, 19)
+
+
 def test_popular_consumo_usd_is_converted():
     txn = parse_email("m2", POPULAR, "Notificación de Consumo",
                       _load("popular_consumo_usd.html"), usd_to_dop=RATE)

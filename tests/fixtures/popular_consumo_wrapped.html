@@ -1,0 +1,18 @@
+<!-- Reproduces Popular's real DOM: nested <table><td> with no <tr>, which makes
+     BeautifulSoup flatten the whole body into the data row's first cell. -->
+<html><table cellpadding="20"><td>
+<table><td align="center"><img/></td></table>
+<p><b>Estimado (a) TITULAR EJEMPLO</b></p>
+<p>Gracias por utilizar su VISA ISI, terminada en  1111.</p>
+<table class="myTable2">
+<tr><th>Monto</th><th>Moneda</th><th>Fecha</th><th>Comercio</th><th>Estatus</th></tr>
+<tr>
+  <td>RD$1,089.90 </td>
+  <td>Peso dominicano </td>
+  <td>19/07/2026 </td>
+  <td>SUPERMERCADO EJEMPLO </td>
+  <td><b>Aprobada</b></td>
+</tr>
+</table>
+<p>Atentamente, Banco Popular Dominicano</p>
+</td></table></html>

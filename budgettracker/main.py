@@ -42,14 +42,17 @@ def _credentials(credentials_file: str, token_file: str) -> Credentials:
     return creds
 
 
-def run(config_path: str = "config.toml") -> int:
+def run(config_path: str = "config.toml", *, dry_run: bool = False) -> int:
     cfg = config_mod.load(config_path)
     creds = _credentials(cfg.gmail_credentials_file, cfg.gmail_token_file)
     gmail = build("gmail", "v1", credentials=creds)
-    sheet = sheets.get_service(creds)
-
-    processed = sheets.read_processed_ids(sheet, cfg.spreadsheet_id, cfg.transactions_tab)
     emails = gmail_client.fetch_candidates(gmail, cfg.fetch_window)
+
+    if dry_run:
+        return _dry_run(cfg, emails)
+
+    sheet = sheets.get_service(creds)
+    processed = sheets.read_processed_ids(sheet, cfg.spreadsheet_id, cfg.transactions_tab)
 
     logged = 0
     for email in emails:
@@ -73,5 +76,30 @@ def run(config_path: str = "config.toml") -> int:
     return logged
 
 
+def _dry_run(cfg, emails) -> int:
+    """Parse and print without touching the Sheet or Telegram."""
+    parsed = 0
+    print(f"Fetched {len(emails)} candidate email(s):\n")
+    for email in emails:
+        txn = parse_email(email.message_id, email.sender, email.subject,
+                          email.html, usd_to_dop=cfg.usd_to_dop)
+        if txn is None:
+            print(f"  · skipped (not a transaction): {email.subject!r}")
+            continue
+        txn = categorize(txn, cfg.rules)
+        parsed += 1
+        print(f"  ✓ {txn.txn_date} | {txn.category:<22} | "
+              f"RD${txn.signed_amount():>10,.2f} | {txn.merchant} ({txn.card})")
+    print(f"\nParsed {parsed} transaction(s). (dry run — nothing written)")
+    return parsed
+
+
 if __name__ == "__main__":
-    run()
+    import argparse
+
+    p = argparse.ArgumentParser(description="Budget tracker poller")
+    p.add_argument("--config", default="config.toml")
+    p.add_argument("--dry-run", action="store_true",
+                   help="fetch + parse + print only; no Sheet writes or Telegram")
+    args = p.parse_args()
+    run(args.config, dry_run=args.dry_run)
