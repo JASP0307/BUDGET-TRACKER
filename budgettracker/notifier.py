@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import html
+
 import requests
 
 from .categorize import is_uncategorized
 from .models import Transaction
 
 _API = "https://api.telegram.org/bot{token}/sendMessage"
+
+_MONTHS_ES = ["ene", "feb", "mar", "abr", "may", "jun",
+              "jul", "ago", "sep", "oct", "nov", "dic"]
 
 
 def send(bot_token: str, chat_id: str, text: str) -> None:
@@ -19,22 +24,40 @@ def send(bot_token: str, chat_id: str, text: str) -> None:
     resp.raise_for_status()
 
 
+def _progress_bar(pct: float, width: int = 10) -> str:
+    filled = min(width, round(pct / 100 * width))
+    return "▓" * filled + "░" * (width - filled)
+
+
 def transaction_message(txn: Transaction, spent: float, budget: float) -> str:
     """Compose the per-transaction alert: what was charged + remaining budget."""
-    remaining = budget - spent
-    sign = "↩️ reversa " if txn.signed_amount() < 0 else ""
+    merchant = html.escape(txn.merchant)
+    card = html.escape(txn.card)
+    category = html.escape(txn.category or "Sin categoría")
+    amount = abs(txn.signed_amount())
+    when = f"{txn.txn_date.day} {_MONTHS_ES[txn.txn_date.month - 1]}"
+
+    header = "↩️ Reversa" if txn.signed_amount() < 0 else "💳 Nuevo consumo"
     lines = [
-        f"{sign}<b>{txn.category}</b>",
-        f"{txn.merchant} — RD${abs(txn.signed_amount()):,.2f} ({txn.card})",
+        f"{header}",
+        f"<b>{merchant}</b> — <b>RD${amount:,.2f}</b>",
+        f"{card} · {when}",
+        f"🏷️ {category}",
     ]
+
     if budget > 0:
-        pct = spent / budget * 100 if budget else 0
+        remaining = budget - spent
+        pct = spent / budget * 100
+        lines.append("")
         if remaining < 0:
-            lines.append(f"⚠️ <b>Excedido</b> por RD${-remaining:,.2f} "
-                         f"(gastado RD${spent:,.2f} de RD${budget:,.2f})")
+            lines.append(f"🔴 <b>Presupuesto excedido</b> por RD${-remaining:,.2f}")
         else:
-            lines.append(f"Restante: RD${remaining:,.2f} de RD${budget:,.2f} "
-                         f"({pct:.0f}% usado)")
+            status = "🟢" if pct < 70 else "🟡"
+            lines.append(f"{status} Restante: <b>RD${remaining:,.2f}</b>")
+        lines.append(f"{_progress_bar(min(pct, 100))} {pct:.0f}%")
+        lines.append(f"RD${spent:,.2f} de RD${budget:,.2f} este mes")
+
     if is_uncategorized(txn):
+        lines.append("")
         lines.append("🗂️ Sin categoría — agrega una regla si se repite.")
     return "\n".join(lines)
