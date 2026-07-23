@@ -20,8 +20,8 @@ from ..auth.deps import current_user
 from ..db import get_sessionmaker
 from ..models import (Budget, Card, Category, InboundAddress, RawEmail, Rule,
                       Transaction, User)
+from ..services.inbound import format_inbound_address
 from ..services.ingest import _next_month, recategorize_uncategorized
-from ..settings import get_settings
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
@@ -71,8 +71,7 @@ def home(request: Request, user: User = Depends(current_user)):
             "month": month_start, "rows": rows, "recent": recent,
             "categories": categories, "needs_review": needs_review,
             "problem_mail": problem_mail,
-            "inbound_addr": f"u_{inbound.token}@{get_settings().inbound_domain}"
-                            if inbound else None,
+            "inbound_addr": format_inbound_address(inbound.token) if inbound else None,
         })
 
 

@@ -55,6 +55,23 @@ def test_qik_purchase_end_to_end(client):
         assert card.needs_review  # auto-created, unlabeled
 
 
+def test_postmark_mailbox_hash_routes(client):
+    """Postmark's default inbound delivers the token as a mailbox hash
+    (<pmhash>+u_<token>@inbound.postmarkapp.com), not a u_<token>@ local part."""
+    token = _token(client)
+    payload = {
+        "MessageID": "pm1",
+        "From": QIK_SENDER,
+        "Subject": QIK_SUBJECT,
+        "ToFull": [{"Email": f"abc123hash+u_{token}@inbound.postmarkapp.com",
+                    "MailboxHash": f"u_{token}"}],
+        "MailboxHash": f"u_{token}",
+        "HtmlBody": (FIXTURES / "qik_purchase.html").read_text(encoding="utf-8"),
+        "Headers": [],
+    }
+    assert _post(client, payload).json() == {"status": "processed"}
+
+
 def test_duplicate_content_is_skipped(client):
     token = _token(client)
     assert _post(client, _payload("m1", token)).json()["status"] == "processed"

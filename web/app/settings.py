@@ -22,6 +22,7 @@ class Settings:
     postmark_token: str | None
     from_email: str
     bootstrap_password: str | None
+    postmark_inbound_address: str | None
 
 
 def get_settings() -> Settings:
@@ -46,4 +47,8 @@ def get_settings() -> Settings:
         from_email=os.environ.get("BUDGET_FROM_EMAIL", "no-reply@localhost"),
         # If set, the bootstrap user gets this password so the dev can log in.
         bootstrap_password=os.environ.get("BUDGET_BOOTSTRAP_PASSWORD"),
+        # Postmark's server inbound address (e.g. <hash>@inbound.postmarkapp.com).
+        # When set, per-user forward addresses use its mailbox-hash form instead
+        # of a custom inbound domain. See services.inbound.format_inbound_address.
+        postmark_inbound_address=os.environ.get("BUDGET_POSTMARK_INBOUND_ADDRESS"),
     )

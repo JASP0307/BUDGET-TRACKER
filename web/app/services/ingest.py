@@ -32,6 +32,7 @@ log = logging.getLogger("ingest")
 KNOWN_BANK_DOMAINS = ("popularenlinea.com", "qik.do")
 GMAIL_CONFIRMATION_SENDER = "forwarding-noreply@google.com"
 _TOKEN_RE = re.compile(r"^u_([a-z0-9]{6,32})@", re.IGNORECASE)
+_HASH_RE = re.compile(r"^u_([a-z0-9]{6,32})$", re.IGNORECASE)  # Postmark MailboxHash
 _GMAIL_CODE_RE = re.compile(r"\b(\d{9})\b")  # Gmail's numeric confirmation code
 
 DEFAULT_USD_DOP = 60.0
@@ -148,6 +149,12 @@ def _process(session: Session, raw: RawEmail, payload: dict) -> None:
 
 
 def _route(session: Session, payload: dict):
+    """Resolve the inbound address from a payload, supporting both shapes:
+    a custom-domain To (`u_<token>@in.<domain>`) and Postmark's default inbound
+    where the token rides in the mailbox hash (`<pmhash>+u_<token>@...`)."""
+    tokens: list[str] = []
+
+    # Custom-domain path: u_<token>@in.<domain> in the To address.
     candidates = [t.get("Email", "") for t in payload.get("ToFull", [])
                   if isinstance(t, dict)]
     if not candidates and payload.get("To"):
@@ -155,11 +162,22 @@ def _route(session: Session, payload: dict):
     for addr in candidates:
         m = _TOKEN_RE.match(addr.strip())
         if m:
-            found = session.scalar(select(InboundAddress).where(
-                InboundAddress.token == m.group(1).lower(),
-                InboundAddress.active.is_(True)))
-            if found:
-                return found
+            tokens.append(m.group(1).lower())
+
+    # Postmark default-inbound path: the token is the mailbox hash.
+    hashes = [payload.get("MailboxHash", "")]
+    hashes += [t.get("MailboxHash", "") for t in payload.get("ToFull", [])
+               if isinstance(t, dict)]
+    for h in hashes:
+        m = _HASH_RE.match((h or "").strip())
+        if m:
+            tokens.append(m.group(1).lower())
+
+    for token in tokens:
+        found = session.scalar(select(InboundAddress).where(
+            InboundAddress.token == token, InboundAddress.active.is_(True)))
+        if found:
+            return found
     return None
 
 

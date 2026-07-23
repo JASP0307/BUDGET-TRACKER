@@ -24,7 +24,7 @@ from sqlalchemy import func, select
 from ..auth.deps import current_user
 from ..db import get_sessionmaker
 from ..models import Card, InboundAddress, RawEmail, Transaction, User
-from ..settings import get_settings
+from ..services.inbound import format_inbound_address
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
@@ -40,7 +40,7 @@ def _inbound_address(session, user_id) -> str | None:
         InboundAddress.user_id == user_id, InboundAddress.active.is_(True)))
     if inbound is None:
         return None
-    return f"u_{inbound.token}@{get_settings().inbound_domain}"
+    return format_inbound_address(inbound.token)
 
 
 def _latest_confirmation_code(session, user_id) -> str | None:
