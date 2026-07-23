@@ -1,0 +1,44 @@
+# LAN trial stack for this PC — Postgres + app only, no Caddy/HTTPS.
+# The app is published directly on :8000 (reach it at http://<lan-ip>:8000).
+# Secrets live in .env (see .env.example). Run with:
+#   docker compose -f docker-compose.lan.yml up -d --build
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: budget
+      POSTGRES_USER: budget
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U budget"]
+      interval: 5s
+      retries: 10
+
+  web:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      BUDGET_DATABASE_URL: postgresql+psycopg://budget:${POSTGRES_PASSWORD}@db:5432/budget
+      BUDGET_WEBHOOK_SECRET: ${BUDGET_WEBHOOK_SECRET:?set in .env}
+      BUDGET_FERNET_KEY: ${BUDGET_FERNET_KEY:-}
+      BUDGET_INBOUND_DOMAIN: ${BUDGET_INBOUND_DOMAIN:-in.example.do}
+      BUDGET_USER_EMAIL: ${BUDGET_USER_EMAIL:-jabner0703@gmail.com}
+      BUDGET_TELEGRAM_TOKEN: ${BUDGET_TELEGRAM_TOKEN:-}
+      BUDGET_TELEGRAM_BOT_USERNAME: ${BUDGET_TELEGRAM_BOT_USERNAME:-}
+      BUDGET_TELEGRAM_WEBHOOK_SECRET: ${BUDGET_TELEGRAM_WEBHOOK_SECRET:-dev-tg-secret}
+      BUDGET_SESSION_SECRET: ${BUDGET_SESSION_SECRET:?set in .env}
+      BUDGET_BASE_URL: ${BUDGET_BASE_URL:-http://localhost:8000}
+      BUDGET_POSTMARK_TOKEN: ${BUDGET_POSTMARK_TOKEN:-}
+      BUDGET_FROM_EMAIL: ${BUDGET_FROM_EMAIL:-no-reply@localhost}
+      BUDGET_BOOTSTRAP_PASSWORD: ${BUDGET_BOOTSTRAP_PASSWORD:-}
+    ports:
+      - "8000:8000"
+
+volumes:
+  pgdata:
