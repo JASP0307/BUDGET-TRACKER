@@ -163,6 +163,18 @@
   }
 
   /* ---- misc ---- */
+  .cta {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 1rem; flex-wrap: wrap;
+    border-color: color-mix(in srgb, var(--brand) 40%, var(--line));
+    background: color-mix(in srgb, var(--brand) 6%, var(--card));
+  }
+  .cta-btn {
+    flex: none; text-decoration: none; background: var(--brand);
+    color: var(--btn-ink); font-weight: 600; padding: .55rem .9rem;
+    border-radius: 8px;
+  }
+  a.pill { text-decoration: none; }
   .pills { display: flex; flex-wrap: wrap; gap: .5rem; }
   .pill {
     border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
@@ -208,6 +220,88 @@
   }
   @media (max-width: 560px) { .user-menu .who { display: none; } }
 
+  /* ---- setup wizard ---- */
+  .setup { max-width: 640px; margin: 0 auto; }
+  .setup > h1 { font-size: 1.5rem; margin: .25rem 0 .3rem; }
+  .setup > .lede { margin: 0 0 1.5rem; color: var(--muted); }
+  .step-head { display: flex; align-items: center; gap: .6rem; margin-bottom: .9rem; }
+  .step-head h2 { font-size: 1.05rem; margin: 0; }
+  .step-n {
+    flex: none; width: 1.6rem; height: 1.6rem; border-radius: 50%;
+    display: grid; place-items: center; font-family: var(--font-mono);
+    font-size: .85rem; font-weight: 700;
+    color: var(--muted); background: color-mix(in srgb, var(--line) 55%, transparent);
+    border: 1px solid var(--line);
+  }
+  .step-n.done {
+    color: var(--btn-ink); background: var(--brand); border-color: var(--brand);
+  }
+  .step-n.done::after { content: "✓"; }
+  .step-n.done { font-size: 0; }
+  .step-n.done::after { font-size: .95rem; }
+
+  .card-list { list-style: none; margin: 0 0 1rem; padding: 0; }
+  .card-row {
+    display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
+    padding: .55rem 0; border-bottom: 1px solid var(--line);
+  }
+  .card-label-form {
+    display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
+    flex: 1 1 auto; min-width: 0;
+  }
+  .card-id { font-weight: 600; white-space: nowrap; }
+  .card-label-form input { flex: 1 1 8rem; min-width: 0; }
+  .add-card { padding-top: .25rem; }
+  .add-card input[name="last4"] { width: 6rem; flex: none; }
+  .add-card input[name="label"] { flex: 1 1 8rem; min-width: 0; }
+  .small-btn {
+    background: none; border: 1px solid var(--line); color: var(--ink);
+    font-weight: 500; padding: .35rem .6rem; font-size: .85rem;
+  }
+  .small-btn:hover { border-color: var(--brand); color: var(--brand); }
+
+  .copybar {
+    display: flex; align-items: center; gap: .5rem; margin: .5rem 0;
+    border: 1px solid var(--line); border-radius: 10px; padding: .35rem .35rem .35rem .7rem;
+    background: color-mix(in srgb, var(--line) 25%, transparent);
+  }
+  .copybar code {
+    flex: 1 1 auto; background: none; padding: 0; font-size: .9rem;
+    overflow-x: auto; white-space: nowrap;
+  }
+  .copybar .small-btn { flex: none; background: var(--card); }
+
+  ol.steps { margin: 1rem 0 0; padding-left: 1.2rem; }
+  ol.steps li { margin-bottom: .7rem; }
+
+  .code-box {
+    margin-top: 1rem; padding: .9rem 1rem; border-radius: 10px;
+    border: 1px dashed var(--line); display: flex; flex-direction: column; gap: .2rem;
+  }
+  .code-box.shown { border-style: solid; border-color: var(--brand); }
+  .code-box #code-value:empty { display: none; }
+  .code-box #code-value {
+    font-size: 1.8rem; font-weight: 700; letter-spacing: .12em;
+    color: var(--brand);
+  }
+
+  .status-line { display: flex; align-items: center; gap: .5rem; margin: 0; }
+  .status-line.hidden, .hidden { display: none; }
+  .status-line.ok { color: var(--good); }
+  .status-line .check {
+    display: grid; place-items: center; width: 1.3rem; height: 1.3rem;
+    border-radius: 50%; background: var(--good); color: var(--btn-ink);
+    font-size: .8rem; font-weight: 700;
+  }
+  .status-line .dot {
+    width: .6rem; height: .6rem; border-radius: 50%; flex: none;
+    background: var(--warn);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .status-line .dot { animation: pulse 1.6s ease-in-out infinite; }
+  }
+  @keyframes pulse { 50% { opacity: .3; } }
+
   @media (prefers-reduced-motion: no-preference) {
     .cat .fill { transition: width .4s ease; }
     nav a, button, .theme-toggle { transition: color .15s ease, border-color .15s ease; }
@@ -222,6 +316,7 @@
     <a href="/" {% if request.url.path == "/" %}aria-current="page"{% endif %}>Inicio</a>
     <a href="/budgets" {% if request.url.path == "/budgets" %}aria-current="page"{% endif %}>Presupuesto</a>
     <a href="/rules" {% if request.url.path == "/rules" %}aria-current="page"{% endif %}>Reglas</a>
+    <a href="/setup" {% if request.url.path == "/setup" %}aria-current="page"{% endif %}>Conectar</a>
   </nav>
   {% endif %}
   <div class="user-menu">

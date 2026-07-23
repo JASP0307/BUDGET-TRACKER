@@ -8,9 +8,20 @@
 {% set total_spent = rows | sum(attribute="spent") %}
 {% set total_left = total_budget - total_spent %}
 
+{% if not recent %}
+<div class="card cta">
+  <div>
+    <strong>Conecta tu correo para empezar.</strong>
+    <span class="muted">Reenvía las notificaciones de tus tarjetas y tus
+    consumos aparecerán aquí automáticamente.</span>
+  </div>
+  <a class="cta-btn" href="/setup">Conectar correo</a>
+</div>
+{% endif %}
+
 {% if needs_review or problem_mail %}
 <div class="pills" style="margin-bottom:1rem">
-  {% if needs_review %}<span class="pill">🪪 {{ needs_review }} tarjeta(s) sin etiquetar</span>{% endif %}
+  {% if needs_review %}<a class="pill" href="/setup">🪪 {{ needs_review }} tarjeta(s) sin etiquetar</a>{% endif %}
   {% if problem_mail %}<span class="pill">✉️ {{ problem_mail }} correo(s) sin procesar</span>{% endif %}
 </div>
 {% endif %}

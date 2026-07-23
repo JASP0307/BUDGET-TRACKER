@@ -14,7 +14,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from .auth.deps import NotAuthenticated
 from .auth.router import router as auth_router
 from .db import Base, get_engine, get_sessionmaker
-from .routers import dashboard, webhook
+from .routers import dashboard, setup, webhook
 from .services.seed import bootstrap
 from .settings import get_settings
 
@@ -42,6 +42,7 @@ def create_app() -> FastAPI:
 
     app.include_router(webhook.router)
     app.include_router(auth_router)
+    app.include_router(setup.router)
     app.include_router(dashboard.router)
     return app
 

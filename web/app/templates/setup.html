@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}Conectar correo — Budget Tracker{% endblock %}
+{% block content %}
+<div class="setup">
+  <h1>Conecta tu correo</h1>
+  <p class="lede">Reenvía las notificaciones de tus tarjetas y tus consumos
+  aparecerán aquí solos. No compartes claves del banco — solo los correos que
+  tú eliges reenviar.</p>
+
+  {# ---- Step 1: cards ---- #}
+  <section class="card step">
+    <div class="step-head">
+      <span class="step-n {{ 'done' if cards }}">1</span>
+      <h2>Tus tarjetas</h2>
+    </div>
+    {% if cards %}
+    <ul class="card-list">
+      {% for c in cards %}
+      <li class="card-row">
+        <form class="card-label-form" method="post" action="/cards/{{ c.id }}/label">
+          <span class="card-id num">{{ c.bank|capitalize }} ·{{ c.last4 }}</span>
+          {% if c.needs_review %}<span class="pill">Por confirmar</span>{% endif %}
+          <input name="label" value="{{ c.label or '' }}" placeholder="Etiqueta (opcional)"
+                 aria-label="Etiqueta de la tarjeta {{ c.last4 }}">
+          <button class="small-btn" type="submit">Guardar</button>
+        </form>
+        <form class="inline" method="post" action="/cards/{{ c.id }}/delete">
+          <button class="quiet" type="submit"
+                  aria-label="Quitar tarjeta {{ c.last4 }}">Quitar</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="muted">Aún no registras tarjetas. Agrega las que quieres seguir.</p>
+    {% endif %}
+
+    <form class="add-card field-row" method="post" action="/cards">
+      <select name="bank" aria-label="Banco">
+        {% for value, name in banks %}<option value="{{ value }}">{{ name }}</option>{% endfor %}
+      </select>
+      <input name="last4" inputmode="numeric" pattern="\d{4}" maxlength="4"
+             placeholder="Últimos 4" aria-label="Últimos 4 dígitos" required>
+      <input name="label" placeholder="Etiqueta (opcional)" aria-label="Etiqueta">
+      <button type="submit">Agregar tarjeta</button>
+    </form>
+  </section>
+
+  {# ---- Step 2: forwarding ---- #}
+  <section class="card step">
+    <div class="step-head">
+      <span class="step-n {{ 'done' if confirmation_code }}">2</span>
+      <h2>Reenvía tus notificaciones</h2>
+    </div>
+    {% if inbound_addr %}
+    <p class="muted" style="margin-top:0">Tu dirección personal de ingesta:</p>
+    <div class="copybar">
+      <code id="inbound">{{ inbound_addr }}</code>
+      <button class="small-btn" type="button"
+              onclick="copyText('inbound', this)">Copiar</button>
+    </div>
+
+    <ol class="steps">
+      <li>En Gmail, entra a <strong>Configuración → Reenvío y correo POP/IMAP</strong>
+        y haz clic en <strong>Agregar una dirección de reenvío</strong>.</li>
+      <li>Pega la dirección de arriba. Google enviará un código de confirmación a
+        esa dirección — <strong>aparecerá aquí abajo automáticamente</strong>.</li>
+      <li>Escribe ese código en Gmail para confirmar el reenvío.</li>
+      <li>Crea un filtro que reenvíe solo los correos de tus tarjetas. En el buscador
+        de Gmail usa esta consulta, crea un filtro y elige
+        <strong>Reenviar a</strong> tu dirección:
+        <div class="copybar">
+          <code id="filter">from:({{ bank_domains }})</code>
+          <button class="small-btn" type="button"
+                  onclick="copyText('filter', this)">Copiar</button>
+        </div>
+      </li>
+    </ol>
+
+    <div id="code-box" class="code-box {{ 'shown' if confirmation_code }}">
+      <span class="muted">Código de confirmación de Google</span>
+      <strong id="code-value" class="num">{{ confirmation_code or '' }}</strong>
+      <span id="code-wait" class="status-line {{ 'hidden' if confirmation_code }}">
+        <span class="dot"></span> Esperando el código…
+      </span>
+    </div>
+    {% else %}
+    <p class="muted">No se pudo generar tu dirección de ingesta. Recarga la página
+      o contacta soporte.</p>
+    {% endif %}
+  </section>
+
+  {# ---- Step 3: round-trip ---- #}
+  <section class="card step">
+    <div class="step-head">
+      <span class="step-n {{ 'done' if tx_count }}">3</span>
+      <h2>Confirma que funciona</h2>
+    </div>
+    <div id="roundtrip">
+      {% if tx_count %}
+      <p class="status-line ok"><span class="check">✓</span>
+        ¡Listo! Ya recibimos transacciones de tus tarjetas.
+        <a href="/">Ver mi presupuesto</a></p>
+      {% else %}
+      <p class="status-line"><span class="dot"></span>
+        Haz una compra pequeña (o reenvía un correo reciente de tu tarjeta).
+        La primera transacción aparecerá aquí.</p>
+      {% endif %}
+    </div>
+  </section>
+</div>
+
+<script>
+  function copyText(id, btn) {
+    var text = document.getElementById(id).textContent.trim();
+    navigator.clipboard.writeText(text).then(function () {
+      var old = btn.textContent;
+      btn.textContent = "Copiado";
+      setTimeout(function () { btn.textContent = old; }, 1500);
+    });
+  }
+
+  (function () {
+    var haveCode = {{ 'true' if confirmation_code else 'false' }};
+    var haveTxn = {{ 'true' if tx_count else 'false' }};
+    if (haveCode && haveTxn) return;  // nothing left to watch
+
+    function showCode(code) {
+      document.getElementById("code-value").textContent = code;
+      document.getElementById("code-box").classList.add("shown");
+      document.getElementById("code-wait").classList.add("hidden");
+      document.querySelectorAll('.step-n')[1].classList.add("done");
+    }
+    function showTxn() {
+      document.getElementById("roundtrip").innerHTML =
+        '<p class="status-line ok"><span class="check">✓</span> ' +
+        '¡Listo! Ya recibimos transacciones de tus tarjetas. ' +
+        '<a href="/">Ver mi presupuesto</a></p>';
+      document.querySelectorAll('.step-n')[2].classList.add("done");
+    }
+
+    async function poll() {
+      try {
+        var r = await fetch("/setup/status", {headers: {"Accept": "application/json"}});
+        if (!r.ok) return;
+        var s = await r.json();
+        if (!haveCode && s.confirmation_code) { haveCode = true; showCode(s.confirmation_code); }
+        if (!haveTxn && s.tx_count > 0) { haveTxn = true; showTxn(); }
+        if (haveCode && haveTxn) clearInterval(timer);
+      } catch (e) { /* transient — keep polling */ }
+    }
+    var timer = setInterval(poll, 4000);
+  })();
+</script>
+{% endblock %}
