@@ -112,9 +112,12 @@ def _process(session: Session, raw: RawEmail, payload: dict) -> None:
     category = session.scalar(select(Category).where(
         Category.user_id == raw.user_id, Category.name == txn.category))
 
-    # 7. Content dedupe (same key the legacy Sheet pipeline uses).
+    # 7. Content dedupe. Key on the card's STABLE identity (bank+last4), not its
+    # display label — a user relabeling a card must not make the same charge look
+    # new and double-count it.
+    card_key = f"{card.bank}:{card.last4}"
     key = "|".join(str(p) for p in signature(
-        txn.card, txn.txn_date, txn.merchant, txn.signed_amount()))
+        card_key, txn.txn_date, txn.merchant, txn.signed_amount()))
     duplicate = session.scalar(select(Transaction).where(
         Transaction.user_id == raw.user_id, Transaction.dedupe_key == key))
     if duplicate is not None:

@@ -55,6 +55,24 @@ def test_qik_purchase_end_to_end(client):
         assert card.needs_review  # auto-created, unlabeled
 
 
+def test_dedupe_survives_card_relabel(client):
+    """The same charge must dedupe even after the card is relabeled — the key
+    is on bank+last4, not the mutable display label."""
+    from web.app.db import get_sessionmaker
+    from web.app.models import Card, Transaction
+    token = _token(client)
+
+    assert _post(client, _payload("r1", token)).json()["status"] == "processed"
+    with get_sessionmaker()() as s:
+        card = s.scalar(select(Card))
+        card.label = "Mi Qik Renombrada"
+        s.commit()
+    # Same charge, new message id (bank double-send) after relabel → still a dup.
+    assert _post(client, _payload("r2", token)).json()["status"] == "skipped"
+    with get_sessionmaker()() as s:
+        assert len(s.scalars(select(Transaction)).all()) == 1
+
+
 def test_postmark_mailbox_hash_routes(client):
     """Postmark's default inbound delivers the token as a mailbox hash
     (<pmhash>+u_<token>@inbound.postmarkapp.com), not a u_<token>@ local part."""
