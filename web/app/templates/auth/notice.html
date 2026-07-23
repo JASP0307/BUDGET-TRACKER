@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — Budget Tracker{% endblock %}
+{% block content %}
+<div class="auth-wrap">
+  <h1>{{ title }}</h1>
+  <p class="lede">{{ message }}</p>
+  {% if link_url %}<a class="alt-link" href="{{ link_url }}">{{ link_text }}</a>{% endif %}
+</div>
+{% endblock %}

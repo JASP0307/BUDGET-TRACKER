@@ -1,6 +1,7 @@
 """Server-rendered pages: month dashboard, transactions, rules, budgets.
 
-Single-tenant: every handler acts on the bootstrap user until Phase 2 auth.
+Every handler acts on the logged-in user (auth.deps.current_user); queries are
+scoped by user_id so one account can never read or mutate another's data.
 """
 
 from __future__ import annotations
@@ -9,12 +10,13 @@ import uuid
 from datetime import date
 from pathlib import Path
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from ..auth.deps import current_user
 from ..db import get_sessionmaker
 from ..models import (Budget, Card, Category, InboundAddress, RawEmail, Rule,
                       Transaction, User)
@@ -23,11 +25,6 @@ from ..settings import get_settings
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
-
-
-def _user(session: Session) -> User:
-    return session.scalar(select(User).where(
-        User.email == get_settings().default_user_email))
 
 
 def _month_rows(session: Session, user_id, month_start: date) -> list[dict]:
@@ -53,10 +50,9 @@ def _month_rows(session: Session, user_id, month_start: date) -> list[dict]:
 
 
 @router.get("/")
-def home(request: Request):
+def home(request: Request, user: User = Depends(current_user)):
     month_start = date.today().replace(day=1)
     with get_sessionmaker()() as session:
-        user = _user(session)
         rows = _month_rows(session, user.id, month_start)
         recent = session.scalars(
             select(Transaction).where(Transaction.user_id == user.id)
@@ -81,19 +77,21 @@ def home(request: Request):
 
 
 @router.post("/transactions/{txn_id}/category")
-def recategorize(txn_id: uuid.UUID, category_id: uuid.UUID = Form(...)):
+def recategorize(txn_id: uuid.UUID, category_id: uuid.UUID = Form(...),
+                 user: User = Depends(current_user)):
     with get_sessionmaker()() as session:
         txn = session.get(Transaction, txn_id)
-        if txn is not None and session.get(Category, category_id) is not None:
+        category = session.get(Category, category_id)
+        if (txn is not None and txn.user_id == user.id
+                and category is not None and category.user_id == user.id):
             txn.category_id = category_id
             session.commit()
     return RedirectResponse("/", status_code=303)
 
 
 @router.get("/rules")
-def rules_page(request: Request):
+def rules_page(request: Request, user: User = Depends(current_user)):
     with get_sessionmaker()() as session:
-        user = _user(session)
         rules = session.scalars(select(Rule).where(Rule.user_id == user.id)
                                 .order_by(Rule.priority)).all()
         categories = session.scalars(select(Category)
@@ -104,10 +102,12 @@ def rules_page(request: Request):
 
 
 @router.post("/rules")
-def add_rule(substring: str = Form(...), category_id: uuid.UUID = Form(...)):
+def add_rule(substring: str = Form(...), category_id: uuid.UUID = Form(...),
+             user: User = Depends(current_user)):
     with get_sessionmaker()() as session:
-        user = _user(session)
-        if substring.strip() and session.get(Category, category_id) is not None:
+        category = session.get(Category, category_id)
+        if (substring.strip() and category is not None
+                and category.user_id == user.id):
             session.add(Rule(user_id=user.id, substring=substring.strip().upper(),
                              category_id=category_id))
             session.commit()
@@ -115,31 +115,29 @@ def add_rule(substring: str = Form(...), category_id: uuid.UUID = Form(...)):
 
 
 @router.post("/rules/{rule_id}/delete")
-def delete_rule(rule_id: uuid.UUID):
+def delete_rule(rule_id: uuid.UUID, user: User = Depends(current_user)):
     with get_sessionmaker()() as session:
         rule = session.get(Rule, rule_id)
-        if rule is not None:
+        if rule is not None and rule.user_id == user.id:
             session.delete(rule)
             session.commit()
     return RedirectResponse("/rules", status_code=303)
 
 
 @router.get("/budgets")
-def budgets_page(request: Request):
+def budgets_page(request: Request, user: User = Depends(current_user)):
     month_start = date.today().replace(day=1)
     with get_sessionmaker()() as session:
-        user = _user(session)
         return templates.TemplateResponse(request, "budgets.html", {
             "month": month_start,
             "rows": _month_rows(session, user.id, month_start)})
 
 
 @router.post("/budgets")
-async def save_budgets(request: Request):
+async def save_budgets(request: Request, user: User = Depends(current_user)):
     month_start = date.today().replace(day=1)
     form = await request.form()
     with get_sessionmaker()() as session:
-        user = _user(session)
         for key, value in form.items():
             if not key.startswith("budget_"):
                 continue
@@ -148,7 +146,8 @@ async def save_budgets(request: Request):
                 amount = float(value or 0)
             except ValueError:
                 continue
-            if session.get(Category, cat_id) is None:
+            category = session.get(Category, cat_id)
+            if category is None or category.user_id != user.id:
                 continue
             row = session.scalar(select(Budget).where(
                 Budget.user_id == user.id, Budget.category_id == cat_id,

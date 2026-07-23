@@ -68,7 +68,7 @@
   nav a:hover { color: var(--ink); }
   nav a[aria-current="page"] { color: var(--brand); font-weight: 600; }
   .theme-toggle {
-    margin-left: auto; background: none; border: 1px solid var(--line);
+    background: none; border: 1px solid var(--line);
     border-radius: 8px; color: var(--ink); cursor: pointer;
     display: flex; align-items: center; padding: .5rem;
   }
@@ -177,6 +177,37 @@
   .field-row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
   .field-row input[name="substring"] { flex: 1 1 12rem; min-width: 0; }
 
+  /* ---- auth ---- */
+  .auth-wrap { max-width: 23rem; margin: 2.5rem auto 0; }
+  .auth-wrap h1 {
+    font-size: 1.4rem; margin: 0 0 .3rem;
+  }
+  .auth-wrap .lede { margin: 0 0 1.25rem; color: var(--muted); font-size: .95rem; }
+  .field { display: block; margin-bottom: .9rem; }
+  .field label {
+    display: block; font-size: .82rem; font-weight: 600;
+    color: var(--muted); margin-bottom: .3rem;
+  }
+  .field input { width: 100%; }
+  button.block { width: 100%; padding: .65rem; margin-top: .25rem; }
+  .alt-link { margin-top: 1.1rem; font-size: .9rem; color: var(--muted); }
+  .alert {
+    border-radius: 10px; padding: .6rem .8rem; margin-bottom: 1rem;
+    font-size: .9rem; border: 1px solid;
+  }
+  .alert.err {
+    color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, transparent);
+    background: color-mix(in srgb, var(--bad) 8%, transparent);
+  }
+  .user-menu {
+    margin-left: auto; display: flex; align-items: center; gap: .6rem;
+  }
+  .user-menu .who {
+    font-size: .85rem; color: var(--muted); max-width: 12rem;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  @media (max-width: 560px) { .user-menu .who { display: none; } }
+
   @media (prefers-reduced-motion: no-preference) {
     .cat .fill { transition: width .4s ease; }
     nav a, button, .theme-toggle { transition: color .15s ease, border-color .15s ease; }
@@ -186,23 +217,33 @@
 <body>
 <header>
   <a class="brand" href="/"><span class="brand-mark">RD$</span><span class="brand-text">Budget</span></a>
+  {% if request.state.user %}
   <nav>
     <a href="/" {% if request.url.path == "/" %}aria-current="page"{% endif %}>Inicio</a>
     <a href="/budgets" {% if request.url.path == "/budgets" %}aria-current="page"{% endif %}>Presupuesto</a>
     <a href="/rules" {% if request.url.path == "/rules" %}aria-current="page"{% endif %}>Reglas</a>
   </nav>
-  <button class="theme-toggle" type="button" onclick="toggleTheme()"
-          aria-label="Cambiar entre tema claro y oscuro">
-    <svg class="sun" width="18" height="18" viewBox="0 0 24 24" fill="none"
-         stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="4"/>
-      <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.2 2.2M16.9 16.9l2.2 2.2M19.1 4.9l-2.2 2.2M7.1 16.9l-2.2 2.2"/>
-    </svg>
-    <svg class="moon" width="18" height="18" viewBox="0 0 24 24"
-         fill="currentColor" aria-hidden="true">
-      <path d="M20.6 14.6A8.5 8.5 0 0 1 9.4 3.4a8.5 8.5 0 1 0 11.2 11.2z"/>
-    </svg>
-  </button>
+  {% endif %}
+  <div class="user-menu">
+    {% if request.state.user %}
+    <span class="who">{{ request.state.user.email }}</span>
+    <form class="inline" method="post" action="/logout">
+      <button class="quiet" type="submit">Salir</button>
+    </form>
+    {% endif %}
+    <button class="theme-toggle" type="button" onclick="toggleTheme()"
+            aria-label="Cambiar entre tema claro y oscuro">
+      <svg class="sun" width="18" height="18" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"/>
+        <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.2 2.2M16.9 16.9l2.2 2.2M19.1 4.9l-2.2 2.2M7.1 16.9l-2.2 2.2"/>
+      </svg>
+      <svg class="moon" width="18" height="18" viewBox="0 0 24 24"
+           fill="currentColor" aria-hidden="true">
+        <path d="M20.6 14.6A8.5 8.5 0 0 1 9.4 3.4a8.5 8.5 0 1 0 11.2 11.2z"/>
+      </svg>
+    </button>
+  </div>
 </header>
 <main>{% block content %}{% endblock %}</main>
 <script>

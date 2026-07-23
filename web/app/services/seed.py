@@ -24,8 +24,14 @@ SYSTEM_CATEGORIES = ["Retiro Efectivo", "Otros / sin categoría"]
 
 
 def bootstrap(session: Session) -> User:
-    """Idempotent: create the default user + address + categories if absent."""
-    email = get_settings().default_user_email
+    """Idempotent: create the default user + address + categories if absent.
+
+    The bootstrap account predates password auth; if BUDGET_BOOTSTRAP_PASSWORD
+    is set it is (re)applied here so the developer can sign in to the existing
+    account and keep its seeded data and inbound routing.
+    """
+    settings = get_settings()
+    email = settings.default_user_email
     user = session.scalar(select(User).where(User.email == email))
     if user is None:
         user = User(email=email, is_verified=True)
@@ -33,6 +39,11 @@ def bootstrap(session: Session) -> User:
         session.flush()
         session.add(InboundAddress(user_id=user.id, token=new_token()))
         seed_categories(session, user.id)
+        session.commit()
+    if settings.bootstrap_password:
+        from ..auth.security import hash_password
+        user.hashed_password = hash_password(settings.bootstrap_password)
+        user.is_verified = True
         session.commit()
     return user
 
