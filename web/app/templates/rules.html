@@ -1,31 +1,37 @@
 {% extends "base.html" %}
 {% block title %}Reglas — Budget Tracker{% endblock %}
 {% block content %}
-<div class="card">
-  <h2 style="margin:0 0 .5rem">Reglas de categorización</h2>
-  <p class="muted">La primera coincidencia (por substring del comercio, sin
-  distinguir mayúsculas) gana. Sin coincidencia → «Otros / sin categoría».</p>
-  <table>
-    <tr><th>Substring</th><th>Categoría</th><th></th></tr>
+<section class="card">
+  <h2 class="section-title">Reglas de categorización</h2>
+  <p class="muted" style="margin-top:0">La primera coincidencia (por substring del
+  comercio, sin distinguir mayúsculas) gana. Sin coincidencia → «Otros / sin
+  categoría».</p>
+  <ul class="txns">
     {% for r in rules %}
-    <tr>
-      <td><code>{{ r.substring }}</code></td>
-      <td>{{ r.category.name }}</td>
-      <td><form class="inline" method="post" action="/rules/{{ r.id }}/delete">
-        <button class="small">eliminar</button></form></td>
-    </tr>
+    <li class="txn">
+      <div class="txn-line">
+        <span><code>{{ r.substring }}</code> <span class="muted">→</span> {{ r.category.name }}</span>
+        <form class="inline" method="post" action="/rules/{{ r.id }}/delete">
+          <button class="quiet" aria-label="Eliminar regla {{ r.substring }}">Eliminar</button>
+        </form>
+      </div>
+    </li>
     {% else %}
-    <tr><td colspan="3" class="muted">Sin reglas todavía.</td></tr>
+    <li class="txn muted">Sin reglas todavía. Agrega una abajo para categorizar
+      tus consumos automáticamente.</li>
     {% endfor %}
-  </table>
-</div>
-<div class="card">
-  <form method="post" action="/rules">
-    <input name="substring" placeholder="p. ej. UBER EATS" required>
-    <select name="category_id">
+  </ul>
+</section>
+
+<section class="card">
+  <h2 class="section-title">Nueva regla</h2>
+  <form method="post" action="/rules" class="field-row">
+    <input name="substring" placeholder="p. ej. UBER EATS" required
+           aria-label="Substring del comercio">
+    <select name="category_id" aria-label="Categoría">
       {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
     </select>
-    <button>Agregar regla</button>
+    <button type="submit">Agregar regla</button>
   </form>
-</div>
+</section>
 {% endblock %}

@@ -1,61 +1,102 @@
 {% extends "base.html" %}
 {% block content %}
+{% set MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+                "agosto", "septiembre", "octubre", "noviembre", "diciembre"] %}
+{% set MES_ABR = ["ene", "feb", "mar", "abr", "may", "jun", "jul",
+                  "ago", "sep", "oct", "nov", "dic"] %}
+{% set total_budget = rows | sum(attribute="budget") %}
+{% set total_spent = rows | sum(attribute="spent") %}
+{% set total_left = total_budget - total_spent %}
 
 {% if needs_review or problem_mail %}
-<div class="card">
+<div class="pills" style="margin-bottom:1rem">
   {% if needs_review %}<span class="pill">🪪 {{ needs_review }} tarjeta(s) sin etiquetar</span>{% endif %}
   {% if problem_mail %}<span class="pill">✉️ {{ problem_mail }} correo(s) sin procesar</span>{% endif %}
 </div>
 {% endif %}
 
-<div class="card">
-  <h2 style="margin:0 0 .5rem">{{ month.strftime("%B %Y") }}</h2>
-  <table>
-    <tr><th>Categoría</th><th class="num">Presupuesto</th><th class="num">Gastado</th>
-        <th class="num">Restante</th><th>Progreso</th></tr>
-    {% for r in rows %}
-    <tr>
-      <td>{{ r.category.name }}</td>
-      <td class="num">{{ "{:,.0f}".format(r.budget) }}</td>
-      <td class="num">{{ "{:,.2f}".format(r.spent) }}</td>
-      <td class="num {{ 'neg' if r.remaining < 0 else 'pos' }}">{{ "{:,.2f}".format(r.remaining) }}</td>
-      <td>{% if r.pct is not none %}
-        <div class="bar"><i class="{{ 'bad' if r.pct >= 100 else 'warn' if r.pct >= 70 else '' }}"
-             style="width: {{ [r.pct, 100] | min }}%"></i></div>
-        <span class="muted">{{ "%.0f" | format(r.pct) }}%</span>
-      {% else %}<span class="muted">—</span>{% endif %}</td>
-    </tr>
-    {% endfor %}
-  </table>
-</div>
+<section class="card hero">
+  <p class="eyebrow">{{ MESES[month.month - 1] }} {{ month.year }}</p>
+  <p class="amount {{ 'neg' if total_left < 0 }}">
+    <small>RD$</small> {{ "{:,.2f}".format(total_left) }}
+  </p>
+  {% if total_budget > 0 %}
+  <p class="sub">
+    {% if total_left < 0 %}Presupuesto excedido —
+    {% else %}Disponible —
+    {% endif %}
+    gastado RD$ {{ "{:,.0f}".format(total_spent) }} de
+    RD$ {{ "{:,.0f}".format(total_budget) }}
+    ({{ "%.0f" | format(total_spent / total_budget * 100) }}%)
+  </p>
+  {% else %}
+  <p class="sub">Sin presupuesto definido para este mes.
+    <a href="/budgets">Definir presupuesto</a></p>
+  {% endif %}
+</section>
 
-<div class="card">
-  <h3 style="margin:0 0 .5rem">Transacciones recientes</h3>
-  <table>
-    <tr><th>Fecha</th><th>Comercio</th><th>Tarjeta</th><th class="num">RD$</th><th>Categoría</th></tr>
+<div class="grid cols">
+<section class="card">
+  <h2 class="section-title">Categorías</h2>
+  <ul class="cats">
+    {% for r in rows %}
+    <li class="cat {{ 'bad' if r.pct is not none and r.pct >= 100
+                      else 'warn' if r.pct is not none and r.pct >= 70 }}">
+      {% if r.pct is not none %}
+      <i class="fill" style="width: {{ [r.pct, 100] | min }}%"></i>
+      {% endif %}
+      <div class="cat-line">
+        <span class="cat-name">{{ r.category.name }}</span>
+        <span class="num cat-left {{ 'neg' if r.remaining < 0 else 'muted' if r.budget == 0 }}">{{ "{:,.2f}".format(r.remaining) }}</span>
+      </div>
+      <div class="cat-meta">
+        {% if r.pct is not none %}
+        <span>{{ "{:,.0f}".format(r.spent) }} de {{ "{:,.0f}".format(r.budget) }}</span>
+        <span>{{ "%.0f" | format(r.pct) }}%</span>
+        {% elif r.spent != 0 %}
+        <span>{{ "{:,.0f}".format(r.spent) }} gastado</span>
+        <span>sin presupuesto</span>
+        {% else %}
+        <span>sin presupuesto</span>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section class="card">
+  <h2 class="section-title">Movimientos recientes</h2>
+  <ul class="txns">
     {% for t in recent %}
-    <tr>
-      <td>{{ t.txn_date }}</td>
-      <td>{{ t.merchant }}</td>
-      <td class="muted">{{ t.card.display }}</td>
-      <td class="num {{ 'pos' if t.amount_dop < 0 else '' }}">{{ "{:,.2f}".format(t.amount_dop) }}</td>
-      <td>
+    <li class="txn">
+      <div class="txn-line">
+        <span class="txn-merchant">{{ t.merchant }}</span>
+        <span class="num {{ 'pos' if t.amount_dop < 0 }}">{{ "{:,.2f}".format(t.amount_dop) }}</span>
+      </div>
+      <div class="txn-meta">
+        <span class="num">{{ t.txn_date.day }} {{ MES_ABR[t.txn_date.month - 1] }} · {{ t.card.display }}</span>
         <form class="inline" method="post" action="/transactions/{{ t.id }}/category">
-          <select name="category_id" onchange="this.form.submit()">
+          <select name="category_id" aria-label="Categoría de {{ t.merchant }}"
+                  onchange="this.form.submit()">
             {% for c in categories %}
             <option value="{{ c.id }}" {{ "selected" if t.category_id == c.id else "" }}>{{ c.name }}</option>
             {% endfor %}
           </select>
         </form>
-      </td>
-    </tr>
+      </div>
+    </li>
     {% else %}
-    <tr><td colspan="5" class="muted">Sin transacciones todavía.</td></tr>
+    <li class="txn muted">Sin transacciones todavía. Los consumos que lleguen
+      por correo aparecerán aquí.</li>
     {% endfor %}
-  </table>
+  </ul>
+</section>
 </div>
 
 {% if inbound_addr %}
-<p class="muted">Dirección de ingesta: <code>{{ inbound_addr }}</code></p>
+<p class="muted" style="margin-top:1rem; font-size:.9rem">
+  Reenvía las notificaciones de tus tarjetas a <code>{{ inbound_addr }}</code>
+</p>
 {% endif %}
 {% endblock %}
