@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Presupuesto — Budget Tracker{% endblock %}
+{% block content %}
+<div class="card">
+  <h2 style="margin:0 0 .5rem">Presupuesto — {{ month.strftime("%B %Y") }}</h2>
+  <form method="post" action="/budgets">
+    <table>
+      <tr><th>Categoría</th><th class="num">RD$ / mes</th></tr>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.category.name }}</td>
+        <td class="num"><input type="number" step="1" min="0" style="width:8rem; text-align:right"
+             name="budget_{{ r.category.id }}" value="{{ "%.0f" | format(r.budget) }}"></td>
+      </tr>
+      {% endfor %}
+    </table>
+    <p><button>Guardar</button></p>
+  </form>
+</div>
+{% endblock %}

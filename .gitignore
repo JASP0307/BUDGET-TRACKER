@@ -16,3 +16,6 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .mypy_cache/
+
+# Web app local dev
+web/dev.db

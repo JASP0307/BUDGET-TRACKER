@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Reglas — Budget Tracker{% endblock %}
+{% block content %}
+<div class="card">
+  <h2 style="margin:0 0 .5rem">Reglas de categorización</h2>
+  <p class="muted">La primera coincidencia (por substring del comercio, sin
+  distinguir mayúsculas) gana. Sin coincidencia → «Otros / sin categoría».</p>
+  <table>
+    <tr><th>Substring</th><th>Categoría</th><th></th></tr>
+    {% for r in rules %}
+    <tr>
+      <td><code>{{ r.substring }}</code></td>
+      <td>{{ r.category.name }}</td>
+      <td><form class="inline" method="post" action="/rules/{{ r.id }}/delete">
+        <button class="small">eliminar</button></form></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="3" class="muted">Sin reglas todavía.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+<div class="card">
+  <form method="post" action="/rules">
+    <input name="substring" placeholder="p. ej. UBER EATS" required>
+    <select name="category_id">
+      {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+    </select>
+    <button>Agregar regla</button>
+  </form>
+</div>
+{% endblock %}

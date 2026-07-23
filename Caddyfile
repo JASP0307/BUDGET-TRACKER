@@ -1,0 +1,4 @@
+# Replace app.example.do with the real domain before deploying.
+app.example.do {
+    reverse_proxy web:8000
+}

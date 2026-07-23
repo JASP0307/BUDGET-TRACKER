@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Budget Tracker{% endblock %}</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1c2733; --muted:#68788d;
+          --line:#e3e8ee; --good:#1a7f4b; --warn:#b7791f; --bad:#c0392b; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.5 system-ui, sans-serif; background:var(--bg); color:var(--ink); }
+  header { background:var(--card); border-bottom:1px solid var(--line);
+           padding:.75rem 1rem; display:flex; gap:1.25rem; align-items:baseline; }
+  header a { color:var(--ink); text-decoration:none; font-weight:600; }
+  header a.sub { color:var(--muted); font-weight:400; }
+  main { max-width: 900px; margin:0 auto; padding:1rem; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px;
+          padding:1rem; margin-bottom:1rem; overflow-x:auto; }
+  table { border-collapse:collapse; width:100%; }
+  th, td { text-align:left; padding:.4rem .6rem; border-bottom:1px solid var(--line);
+           white-space:nowrap; }
+  th { color:var(--muted); font-weight:600; font-size:.85rem; }
+  td.num, th.num { text-align:right; font-variant-numeric: tabular-nums; }
+  .bar { background:var(--line); border-radius:4px; height:8px; min-width:90px; }
+  .bar > i { display:block; height:8px; border-radius:4px; background:var(--good); }
+  .bar > i.warn { background:var(--warn); } .bar > i.bad { background:var(--bad); }
+  .neg { color:var(--bad); } .pos { color:var(--good); }
+  .muted { color:var(--muted); font-size:.9rem; }
+  input, select, button { font:inherit; padding:.35rem .5rem; border:1px solid var(--line);
+          border-radius:6px; background:var(--card); color:var(--ink); }
+  button { cursor:pointer; background:var(--ink); color:#fff; border:none; }
+  button.small { padding:.15rem .5rem; font-size:.8rem; background:var(--muted); }
+  form.inline { display:inline; }
+  .pill { background:var(--bg); border:1px solid var(--line); border-radius:999px;
+          padding:.1rem .6rem; font-size:.85rem; }
+</style>
+</head>
+<body>
+<header>
+  <a href="/">💰 Budget Tracker</a>
+  <a class="sub" href="/budgets">Presupuesto</a>
+  <a class="sub" href="/rules">Reglas</a>
+</header>
+<main>{% block content %}{% endblock %}</main>
+</body>
+</html>

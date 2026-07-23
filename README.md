@@ -34,11 +34,36 @@ core/budgetcore/   # pure domain logic: parsers, categorize, dedupe, messages
 core/tests/        # fixture-driven tests for the core (no credentials needed)
 legacy/budgettracker/  # the single-user cron pipeline (Gmail/Sheets/Telegram I/O)
 legacy/tests/
+legacy/migrate_to_db.py  # one-off Sheet+config -> web DB import (idempotent)
+web/app/           # FastAPI web app (Phase 1: single-tenant MVP)
+web/tests/
 scripts/run.sh     # cron entry point; sets PYTHONPATH=core:legacy
 ```
 
 `budgetcore` has no I/O and depends only on `beautifulsoup4`; everything
 Google/Telegram-specific stays in `legacy/budgettracker`.
+
+## Web app (Phase 1 — single-tenant MVP)
+
+Ingestion is inbound email (Postmark webhook at
+`/webhooks/postmark-inbound/<secret>`) instead of Gmail OAuth: bank
+notifications are auto-forwarded to a per-user `u_<token>@<inbound-domain>`
+address. Pipeline: store raw email → route by token → Gmail-confirmation /
+spoofing checks → `budgetcore` parse/categorize → dedupe (same signature as
+the Sheet pipeline) → Postgres → Telegram alert. Dashboard: budget vs. actual
+per category, recent transactions with one-click recategorize, rule and
+budget editing.
+
+```bash
+pip install -r web/requirements.txt
+PYTHONPATH=core:legacy:. python legacy/migrate_to_db.py   # import Sheet data (once)
+PYTHONPATH=core:. uvicorn web.app.main:app --reload       # http://127.0.0.1:8000
+```
+
+Dev uses SQLite (`web/dev.db`, git-ignored); production uses the
+`docker-compose.yml` stack (Postgres + app + Caddy) configured via `.env`
+(see `.env.example`). Schema is `create_all` for now — Alembic arrives when
+the schema stabilizes (pre-multi-user).
 
 ## Setup
 
