@@ -93,6 +93,34 @@ def _cell_date(value) -> date | None:
         return None
 
 
+def count_today_and_week(service, spreadsheet_id: str, tab: str,
+                         today: date | None = None) -> tuple[int, int]:
+    """Count logged transactions for today and for the current week (Mon–today).
+
+    One unformatted read serves both counts; used by the daily heartbeat."""
+    today = today or date.today()
+    resp = service.spreadsheets().values().get(
+        spreadsheetId=spreadsheet_id, range=f"{tab}!A2:I",
+        valueRenderOption="UNFORMATTED_VALUE").execute()
+    return _count_rows(resp.get("values", []), today)
+
+
+def _count_rows(rows, today: date) -> tuple[int, int]:
+    week_start = today - timedelta(days=today.weekday())
+    today_count = week_count = 0
+    for row in rows:
+        if len(row) < 2:
+            continue
+        d = _cell_date(row[1])
+        if d is None:
+            continue
+        if d == today:
+            today_count += 1
+        if week_start <= d <= today:
+            week_count += 1
+    return today_count, week_count
+
+
 def month_to_date_spend(service, spreadsheet_id: str, tab: str, category: str,
                         today: date | None = None) -> float:
     """Sum signed amounts for `category` within the current month.

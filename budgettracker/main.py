@@ -101,6 +101,23 @@ def run(config_path: str = "config.toml", *, dry_run: bool = False,
     return logged
 
 
+def heartbeat(config_path: str = "config.toml", *, dry_run: bool = False) -> None:
+    """Daily proof-of-life message: one Sheets read, no Gmail fetch."""
+    cfg = config_mod.load(config_path)
+    creds = _credentials(cfg.gmail_credentials_file, cfg.gmail_token_file)
+    sheet = sheets.get_service(creds)
+    today = date.today()
+    today_count, week_count = sheets.count_today_and_week(
+        sheet, cfg.spreadsheet_id, cfg.transactions_tab, today)
+    text = notifier.heartbeat_message(today_count, week_count, today)
+    if dry_run:
+        print(text)
+        print("(dry run — not sent)")
+        return
+    notifier.send(cfg.telegram_bot_token, cfg.telegram_chat_id, text)
+    print(f"Heartbeat sent: {today_count} txn(s) today, {week_count} this week.")
+
+
 def _dry_run(cfg, emails) -> int:
     """Parse and print without touching the Sheet or Telegram."""
     parsed = 0
@@ -128,5 +145,10 @@ if __name__ == "__main__":
                    help="fetch + parse + print only; no Sheet writes or Telegram")
     p.add_argument("--backfill", action="store_true",
                    help="log this month's past transactions to the Sheet; no Telegram")
+    p.add_argument("--heartbeat", action="store_true",
+                   help="send the daily proof-of-life Telegram message; skips Gmail")
     args = p.parse_args()
-    run(args.config, dry_run=args.dry_run, backfill=args.backfill)
+    if args.heartbeat:
+        heartbeat(args.config, dry_run=args.dry_run)
+    else:
+        run(args.config, dry_run=args.dry_run, backfill=args.backfill)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+from datetime import date
 
 import requests
 
@@ -27,6 +28,15 @@ def send(bot_token: str, chat_id: str, text: str) -> None:
 def _progress_bar(pct: float, width: int = 10) -> str:
     filled = min(width, round(pct / 100 * width))
     return "▓" * filled + "░" * (width - filled)
+
+
+def heartbeat_message(today_count: int, week_count: int, today: date) -> str:
+    """Daily proof of life: a dead machine stops sending this, so silence no
+    longer looks like a day without spending."""
+    when = f"{today.day} {_MONTHS_ES[today.month - 1]}"
+    txns = "transacción" if today_count == 1 else "transacciones"
+    return (f"✅ <b>Tracker vivo</b> — {when}\n"
+            f"Hoy: <b>{today_count}</b> {txns} · esta semana: <b>{week_count}</b>")
 
 
 def transaction_message(txn: Transaction, spent: float, budget: float) -> str:

@@ -15,7 +15,11 @@ in `README.md`; this file records where it actually runs today.
 ## Crontab
 ```cron
 */15 * * * * /usr/bin/flock -n /tmp/budget-tracker.lock /home/jabner/Documents/SystemTree/SystemTree/20_Projects/budget-tracker/app/scripts/run.sh >> /home/jabner/Documents/SystemTree/SystemTree/20_Projects/budget-tracker/app/tracker.log 2>&1
+0 20 * * * /usr/bin/flock -w 300 /tmp/budget-tracker.lock /home/jabner/Documents/SystemTree/SystemTree/20_Projects/budget-tracker/app/scripts/run.sh --heartbeat >> /home/jabner/Documents/SystemTree/SystemTree/20_Projects/budget-tracker/app/tracker.log 2>&1
 ```
+The second line is the daily 8 PM heartbeat. It shares the poller's lock but
+waits (up to 5 min) instead of skipping, so it is never silently dropped by an
+in-flight poll — a missing heartbeat should always mean the machine is down.
 - Show it: `crontab -l`
 - Remove it: `crontab -e` and delete the line (or `crontab -r` to clear all).
 
@@ -31,15 +35,19 @@ see README "Running the service on a laptop". A Pi never sleeps, so this section
 won't apply after migration.
 
 ## Health checks
-- `crontab -l` — entry present.
+- `crontab -l` — both entries present (15-min poller + daily heartbeat).
 - `tail -f tracker.log` — timestamped run every 15 min; each line ends with
   "logged N new transaction(s)".
 - Swipe a card → Telegram alert should arrive within 15 min.
+- **Daily heartbeat at 8 PM** ("✅ Tracker vivo — N txns hoy…"). No heartbeat
+  by ~8:10 PM means the machine or cron is down — check the laptop.
 
 ## Common operations
 - **Run once now:** `.venv/bin/python -m budgettracker.main`
 - **See what would be logged (no writes):** `... --dry-run`
 - **Backfill the current month (after downtime):** `... --backfill`
+- **Send the heartbeat now:** `... --heartbeat` (preview without sending:
+  `... --heartbeat --dry-run`)
 - **Change budget/rules/FX rate:** edit `config.toml` (takes effect next run).
 - **New month:** month-to-date formulas roll over automatically (they filter on
   the current month); historical rows stay in the sheet.
