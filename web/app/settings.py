@@ -15,6 +15,8 @@ class Settings:
     default_user_email: str
     fernet_key: str | None
     telegram_bot_token: str | None
+    telegram_bot_username: str | None
+    telegram_webhook_secret: str
     session_secret: str
     base_url: str
     postmark_token: str | None
@@ -30,6 +32,10 @@ def get_settings() -> Settings:
         default_user_email=os.environ.get("BUDGET_USER_EMAIL", "jabner0703@gmail.com"),
         fernet_key=os.environ.get("BUDGET_FERNET_KEY"),
         telegram_bot_token=os.environ.get("BUDGET_TELEGRAM_TOKEN"),
+        # Bot @username for building t.me deep links; discovered via getMe if unset.
+        telegram_bot_username=os.environ.get("BUDGET_TELEGRAM_BOT_USERNAME"),
+        # Guards the Telegram webhook URL, like BUDGET_WEBHOOK_SECRET guards Postmark's.
+        telegram_webhook_secret=os.environ.get("BUDGET_TELEGRAM_WEBHOOK_SECRET", "dev-tg-secret"),
         # Signs session cookies and email-verification tokens. The dev default
         # keeps local runs working; production MUST override it.
         session_secret=os.environ.get("BUDGET_SESSION_SECRET", "dev-session-secret-change-me"),
