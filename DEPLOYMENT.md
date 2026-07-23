@@ -6,7 +6,9 @@ in `README.md`; this file records where it actually runs today.
 ## Where it runs
 - **Host:** old Lenovo laptop (Linux), on AC power. To migrate to a Raspberry Pi
   later, see "Migration" below.
-- **Path:** `/home/jabner/Documents/SystemTree/SystemTree/20_Projects/budget-tracker/app`
+- **Path:** `/home/jabner/Documents/BUDGET-TRACKER` (the dev copy on the main
+  machine lives inside the SystemTree vault at
+  `.../SystemTree/20_Projects/budget-tracker/app`; deploy = push here, pull there)
 - **Schedule:** cron, every 15 min, via `scripts/run.sh` (flock-guarded so runs
   can't overlap). Logs to `tracker.log`.
 - **OAuth:** Google app is in **Production**, so the token does not expire every
@@ -14,8 +16,8 @@ in `README.md`; this file records where it actually runs today.
 
 ## Crontab
 ```cron
-*/15 * * * * /usr/bin/flock -n /tmp/budget-tracker.lock /home/jabner/Documents/SystemTree/SystemTree/20_Projects/budget-tracker/app/scripts/run.sh >> /home/jabner/Documents/SystemTree/SystemTree/20_Projects/budget-tracker/app/tracker.log 2>&1
-0 20 * * * /usr/bin/flock -w 300 /tmp/budget-tracker.lock /home/jabner/Documents/SystemTree/SystemTree/20_Projects/budget-tracker/app/scripts/run.sh --heartbeat >> /home/jabner/Documents/SystemTree/SystemTree/20_Projects/budget-tracker/app/tracker.log 2>&1
+*/15 * * * * /usr/bin/flock -n /tmp/budget-tracker.lock /home/jabner/Documents/BUDGET-TRACKER/scripts/run.sh >> /home/jabner/Documents/BUDGET-TRACKER/tracker.log 2>&1
+0 20 * * * /usr/bin/flock -w 300 /tmp/budget-tracker.lock /home/jabner/Documents/BUDGET-TRACKER/scripts/run.sh --heartbeat >> /home/jabner/Documents/BUDGET-TRACKER/tracker.log 2>&1
 ```
 The second line is the daily 8 PM heartbeat. It shares the poller's lock but
 waits (up to 5 min) instead of skipping, so it is never silently dropped by an
