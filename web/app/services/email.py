@@ -46,3 +46,15 @@ def send_verification_email(to: str, verify_url: str) -> None:
         "El enlace vence en 24 horas. Si no creaste esta cuenta, ignora "
         "este mensaje.",
     )
+
+
+def send_password_reset_email(to: str, reset_url: str) -> None:
+    send_email(
+        to,
+        "Restablece tu contraseña — Budget Tracker",
+        "Recibimos una solicitud para restablecer tu contraseña.\n\n"
+        "Crea una nueva desde este enlace:\n\n"
+        f"{reset_url}\n\n"
+        "El enlace vence en 1 hora. Si no lo solicitaste, ignora este mensaje; "
+        "tu contraseña seguirá igual.",
+    )

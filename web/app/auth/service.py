@@ -1,4 +1,4 @@
-"""User lifecycle: register, authenticate, verify.
+"""User lifecycle: register, authenticate, verify, reset password.
 
 A new user is created together with the things every user needs to receive
 mail and see a dashboard: an inbound address and the default category set —
@@ -14,7 +14,8 @@ from sqlalchemy.orm import Session
 
 from ..models import InboundAddress, User
 from ..services.seed import new_token, seed_categories
-from .security import hash_password, verify_password
+from .security import (hash_password, password_fingerprint, read_reset_token,
+                       verify_password)
 
 # A real Argon2 hash to verify against when the email is unknown, so a failed
 # login costs the same whether or not the account exists (no timing oracle).
@@ -73,3 +74,33 @@ def mark_verified(session: Session, user_id) -> User | None:
         user.is_verified = True
         session.commit()
     return user
+
+
+def user_by_email(session: Session, email: str) -> User | None:
+    return session.scalar(
+        select(User).where(func.lower(User.email) == normalize_email(email)))
+
+
+def resolve_reset_token(session: Session, token: str) -> User | None:
+    """Return the user a reset token is valid for, or None. Valid means: well
+    signed, unexpired, and the embedded fingerprint still matches the user's
+    current password hash (so a used or superseded link is rejected)."""
+    parsed = read_reset_token(token)
+    if parsed is None:
+        return None
+    raw_id, fingerprint = parsed
+    try:
+        user_id = uuid.UUID(raw_id)
+    except (ValueError, TypeError):
+        return None
+    user = session.get(User, user_id)
+    if user is None or not user.hashed_password:
+        return None
+    if password_fingerprint(user.hashed_password) != fingerprint:
+        return None
+    return user
+
+
+def set_password(session: Session, user: User, new_password: str) -> None:
+    user.hashed_password = hash_password(new_password)
+    session.commit()
