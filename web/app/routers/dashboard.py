@@ -20,7 +20,7 @@ from ..auth.deps import current_user
 from ..db import get_sessionmaker
 from ..models import (Budget, Card, Category, InboundAddress, RawEmail, Rule,
                       Transaction, User)
-from ..services.ingest import _next_month
+from ..services.ingest import _next_month, recategorize_uncategorized
 from ..settings import get_settings
 
 router = APIRouter()
@@ -110,6 +110,8 @@ def add_rule(substring: str = Form(...), category_id: uuid.UUID = Form(...),
                 and category.user_id == user.id):
             session.add(Rule(user_id=user.id, substring=substring.strip().upper(),
                              category_id=category_id))
+            session.flush()  # make the new rule visible to the retro-apply pass
+            recategorize_uncategorized(session, user.id)
             session.commit()
     return RedirectResponse("/rules", status_code=303)
 

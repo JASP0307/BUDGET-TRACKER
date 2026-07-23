@@ -120,3 +120,41 @@ def test_rule_applies_to_new_transactions(client):
     from web.app.models import Transaction
     with get_sessionmaker()() as s:
         assert s.scalar(select(Transaction)).category.name == "Delivery"
+
+
+def test_retro_apply_recategorizes_existing_uncategorized(client):
+    # Ingest first, then add the rule — the charge lands as uncategorized.
+    _post(client, _payload("m1", _token(client)))
+    from web.app.db import get_sessionmaker
+    from web.app.models import Category, Rule, Transaction, User
+    from web.app.services.ingest import recategorize_uncategorized
+    with get_sessionmaker()() as s:
+        assert s.scalar(select(Transaction)).category.name == "Otros / sin categoría"
+        user = s.scalar(select(User))
+        target = s.scalar(select(Category).where(Category.name == "Delivery"))
+        s.add(Rule(user_id=user.id, substring="AMAZON", category_id=target.id))
+        s.flush()
+        assert recategorize_uncategorized(s, user.id) == 1
+        s.commit()
+    with get_sessionmaker()() as s:
+        assert s.scalar(select(Transaction)).category.name == "Delivery"
+
+
+def test_retro_apply_leaves_manually_categorized_alone(client):
+    _post(client, _payload("m1", _token(client)))
+    from web.app.db import get_sessionmaker
+    from web.app.models import Category, Rule, Transaction, User
+    from web.app.services.ingest import recategorize_uncategorized
+    with get_sessionmaker()() as s:
+        user = s.scalar(select(User))
+        salidas = s.scalar(select(Category).where(Category.name == "Salidas"))
+        delivery = s.scalar(select(Category).where(Category.name == "Delivery"))
+        # User hand-filed this AMAZON charge under Salidas.
+        s.scalar(select(Transaction)).category_id = salidas.id
+        s.add(Rule(user_id=user.id, substring="AMAZON", category_id=delivery.id))
+        s.flush()
+        # A matching rule must not override the manual choice.
+        assert recategorize_uncategorized(s, user.id) == 0
+        s.commit()
+    with get_sessionmaker()() as s:
+        assert s.scalar(select(Transaction)).category.name == "Salidas"

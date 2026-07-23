@@ -12,10 +12,10 @@ import re
 from dataclasses import replace
 from datetime import date
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from budgetcore.categorize import categorize
+from budgetcore.categorize import UNCATEGORIZED, categorize
 from budgetcore.dedupe import signature
 from budgetcore.parsers import parse_email
 
@@ -180,6 +180,40 @@ def _rules_dict(session: Session, user_id) -> dict[str, str]:
     for r in rows:
         out.setdefault(r.substring, r.category.name)
     return out
+
+
+def recategorize_uncategorized(session: Session, user_id) -> int:
+    """Apply the user's rules to their already-stored, still-uncategorized
+    transactions. Ingestion categorizes on arrival; this backfills the existing
+    dashboard when a rule is added (or edited) later.
+
+    Only transactions currently in UNCATEGORIZED (or with no category) are
+    touched, so manual recategorizations and withdrawals are left alone. The
+    first rule to match by priority wins — the same precedence ingestion uses.
+    Returns the number of transactions moved. Caller commits.
+    """
+    rules = session.scalars(select(Rule).where(Rule.user_id == user_id)
+                            .order_by(Rule.priority)).all()
+    if not rules:
+        return 0
+
+    uncat = session.scalar(select(Category).where(
+        Category.user_id == user_id, Category.name == UNCATEGORIZED))
+    txns = session.scalars(select(Transaction).where(
+        Transaction.user_id == user_id,
+        or_(Transaction.category_id.is_(None),
+            Transaction.category_id == (uncat.id if uncat else None)))).all()
+
+    moved = 0
+    for txn in txns:
+        merchant = (txn.merchant or "").upper()
+        for rule in rules:
+            if rule.substring.upper() in merchant:
+                if txn.category_id != rule.category_id:
+                    txn.category_id = rule.category_id
+                    moved += 1
+                break
+    return moved
 
 
 def current_fx_rate(session: Session) -> float:
