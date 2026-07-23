@@ -11,7 +11,9 @@ from datetime import date, datetime, timedelta
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
-from .models import Transaction
+# Re-exported: callers key dedupe by sheets.signature since the Sheet stores it.
+from budgetcore.dedupe import signature  # noqa: F401
+from budgetcore.models import Transaction
 
 # gmail.readonly for mail + read/write for the sheet.
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -29,13 +31,6 @@ def read_processed_ids(service, spreadsheet_id: str, tab: str) -> set[str]:
     resp = service.spreadsheets().values().get(
         spreadsheetId=spreadsheet_id, range=f"{tab}!A2:A").execute()
     return {row[0] for row in resp.get("values", []) if row}
-
-
-def signature(card: str, txn_date, merchant: str, signed_amount: float) -> tuple:
-    """Content key used to catch duplicate bank notifications (which arrive with
-    different message ids). A reversal has the opposite sign, so it never
-    collides with the original charge."""
-    return (card, txn_date.isoformat(), merchant, round(float(signed_amount), 2))
 
 
 def read_signatures(service, spreadsheet_id: str, tab: str) -> set[tuple]:

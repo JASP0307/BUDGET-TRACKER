@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from budgettracker.categorize import categorize
-from budgettracker.models import TxType
-from budgettracker.parsers import parse_email
+from budgetcore.categorize import categorize
+from budgetcore.models import Bank, TxType
+from budgetcore.parsers import parse_email
 
 FIXTURES = Path(__file__).parent / "fixtures"
 RATE = 60.0
@@ -25,7 +25,9 @@ def test_popular_consumo_rdollar():
                       _load("popular_consumo.html"), usd_to_dop=RATE)
     assert txn is not None
     assert txn.tx_type is TxType.CONSUMO
-    assert txn.card == "Popular VISA ISI *1111"
+    assert txn.bank is Bank.POPULAR
+    assert txn.last4 == "1111"
+    assert txn.card is None  # labeling belongs to the caller's card registry
     assert txn.txn_date == date(2026, 7, 19)
     assert txn.merchant == "SUPERMERCADO EJEMPLO"
     assert txn.currency == "RD$"
@@ -39,7 +41,7 @@ def test_popular_consumo_wrapped_dom():
     txn = parse_email("m1b", POPULAR, "Notificación de Consumo",
                       _load("popular_consumo_wrapped.html"), usd_to_dop=RATE)
     assert txn is not None
-    assert txn.card == "Popular VISA ISI *1111"
+    assert (txn.bank, txn.last4) == (Bank.POPULAR, "1111")
     assert txn.merchant == "SUPERMERCADO EJEMPLO"
     assert txn.amount_dop == pytest.approx(1089.90)
     assert txn.txn_date == date(2026, 7, 19)
@@ -49,7 +51,7 @@ def test_popular_consumo_usd_is_converted():
     txn = parse_email("m2", POPULAR, "Notificación de Consumo",
                       _load("popular_consumo_usd.html"), usd_to_dop=RATE)
     assert txn is not None
-    assert txn.card == "Popular Visa Débito Clásica *2222"
+    assert (txn.bank, txn.last4) == (Bank.POPULAR, "2222")
     assert txn.currency == "US$"
     assert txn.original_amount == pytest.approx(1.99)
     assert txn.amount_dop == pytest.approx(1.99 * RATE)  # 119.40
@@ -77,7 +79,7 @@ def test_qik_purchase():
                       _load("qik_purchase.html"), usd_to_dop=RATE)
     assert txn is not None
     assert txn.tx_type is TxType.CONSUMO
-    assert txn.card == "Qik *3333"
+    assert (txn.bank, txn.last4) == (Bank.QIK, "3333")
     assert txn.txn_date == date(2026, 7, 15)
     assert txn.merchant == "AMAZON 1"
     assert txn.amount_dop == pytest.approx(2031.75)
@@ -88,9 +90,16 @@ def test_qik_reversal_is_negative():
                       _load("qik_reversal.html"), usd_to_dop=RATE)
     assert txn is not None
     assert txn.tx_type is TxType.REVERSAL
+    assert (txn.bank, txn.last4) == (Bank.QIK, "3333")
     assert txn.merchant == "Alibaba.com"
     assert txn.amount_dop == pytest.approx(4433.37)
     assert txn.signed_amount() == pytest.approx(-4433.37)
+
+
+def test_card_label_fallback():
+    txn = parse_email("m5", QIK, "Usaste tu tarjeta de crédito Qik",
+                      _load("qik_purchase.html"), usd_to_dop=RATE)
+    assert txn.card_label == "Qik *3333"  # generic form until a caller labels it
 
 
 def test_categorize_rules_and_fallback():

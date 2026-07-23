@@ -5,4 +5,6 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 echo "----- $(date '+%Y-%m-%d %H:%M:%S %z') -----"
+# Monorepo layout: pure domain logic in core/, the cron pipeline in legacy/.
+export PYTHONPATH="core:legacy${PYTHONPATH:+:$PYTHONPATH}"
 exec .venv/bin/python -m budgettracker.main "$@"

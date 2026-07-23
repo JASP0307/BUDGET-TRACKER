@@ -1,28 +1,19 @@
-"""Telegram notifications sent after each logged transaction."""
+"""Notification message builders (Spanish, Telegram-style HTML).
+
+Pure string functions — no transport. Callers decide the channel
+(Telegram today; web push / in-app later).
+"""
 
 from __future__ import annotations
 
 import html
 from datetime import date
 
-import requests
-
 from .categorize import is_uncategorized
 from .models import Transaction
 
-_API = "https://api.telegram.org/bot{token}/sendMessage"
-
 _MONTHS_ES = ["ene", "feb", "mar", "abr", "may", "jun",
               "jul", "ago", "sep", "oct", "nov", "dic"]
-
-
-def send(bot_token: str, chat_id: str, text: str) -> None:
-    resp = requests.post(
-        _API.format(token=bot_token),
-        json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
-        timeout=15,
-    )
-    resp.raise_for_status()
 
 
 def _progress_bar(pct: float, width: int = 10) -> str:
@@ -42,7 +33,7 @@ def heartbeat_message(today_count: int, week_count: int, today: date) -> str:
 def transaction_message(txn: Transaction, spent: float, budget: float) -> str:
     """Compose the per-transaction alert: what was charged + remaining budget."""
     merchant = html.escape(txn.merchant)
-    card = html.escape(txn.card)
+    card = html.escape(txn.card_label)
     category = html.escape(txn.category or "Sin categoría")
     amount = abs(txn.signed_amount())
     when = f"{txn.txn_date.day} {_MONTHS_ES[txn.txn_date.month - 1]}"

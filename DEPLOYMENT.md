@@ -45,7 +45,7 @@ won't apply after migration.
   by ~8:10 PM means the machine or cron is down — check the laptop.
 
 ## Common operations
-- **Run once now:** `.venv/bin/python -m budgettracker.main`
+- **Run once now:** `scripts/run.sh` (or `PYTHONPATH=core:legacy .venv/bin/python -m budgettracker.main`)
 - **See what would be logged (no writes):** `... --dry-run`
 - **Backfill the current month (after downtime):** `... --backfill`
 - **Send the heartbeat now:** `... --heartbeat` (preview without sending:

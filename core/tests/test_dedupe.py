@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from budgettracker.sheets import signature
+from budgetcore.dedupe import signature
 
 
 def test_identical_notifications_share_a_signature():

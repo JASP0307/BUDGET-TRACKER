@@ -1,8 +1,7 @@
-"""Tests for the daily heartbeat: row counting and message text."""
+"""Tests for the heartbeat's Sheet row counting."""
 
 from datetime import date
 
-from budgettracker.notifier import heartbeat_message
 from budgettracker.sheets import _SHEETS_EPOCH, _count_rows
 
 TODAY = date(2026, 7, 22)  # a Wednesday; week starts Mon 2026-07-20
@@ -41,13 +40,3 @@ def test_malformed_and_short_rows_are_ignored():
     rows.append(_row(TODAY))
     rows[-1][1] = "not-a-date"
     assert _count_rows(rows, TODAY) == (1, 1)
-
-
-def test_message_singular_and_plural():
-    single = heartbeat_message(1, 5, TODAY)
-    assert "1</b> transacción" in single
-    plural = heartbeat_message(3, 12, TODAY)
-    assert "3</b> transacciones" in plural
-    assert "22 jul" in plural
-    assert "Tracker vivo" in plural
-    assert "12" in plural

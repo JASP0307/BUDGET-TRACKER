@@ -7,6 +7,11 @@ from datetime import date
 from enum import Enum
 
 
+class Bank(str, Enum):
+    POPULAR = "popular"
+    QIK = "qik"
+
+
 class TxType(str, Enum):
     CONSUMO = "consumo"        # card purchase
     RETIRO = "retiro"         # ATM cash withdrawal
@@ -15,10 +20,16 @@ class TxType(str, Enum):
 
 @dataclass(frozen=True)
 class Transaction:
-    """One normalized transaction extracted from a notification email."""
+    """One normalized transaction extracted from a notification email.
 
-    message_id: str            # Gmail message id — the dedupe key
-    card: str                  # e.g. "Popular VISA ISI *1111"
+    Parsers identify the card only as (bank, last4); the human-readable
+    `card` label is resolved afterwards by the caller against its own card
+    registry (legacy: a hardcoded map; web: the user's registered cards).
+    """
+
+    message_id: str            # source message id — the primary dedupe key
+    bank: Bank
+    last4: str                 # last 4 digits, "????" if absent from the email
     tx_type: TxType
     txn_date: date
     merchant: str              # merchant, ATM name, or reversal source
@@ -26,6 +37,12 @@ class Transaction:
     original_amount: float     # amount as printed on the email
     currency: str              # "RD$" or "US$"
     category: str | None = None  # filled in by categorize step
+    card: str | None = None    # display label, e.g. "Popular VISA ISI *1111"
+
+    @property
+    def card_label(self) -> str:
+        """Resolved label, falling back to a generic bank+last4 form."""
+        return self.card or f"{self.bank.value.capitalize()} *{self.last4}"
 
     def signed_amount(self) -> float:
         """Reversals count as negative so a month self-corrects."""

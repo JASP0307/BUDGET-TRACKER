@@ -1,10 +1,13 @@
 """Parse card-notification emails into normalized Transactions.
 
-Formats are documented in ../../NOTES.md ("Email formats"). Four shapes:
+Formats are documented in the project's NOTES.md ("Email formats"). Four shapes:
   - Banco Popular "Notificación de Consumo"  (card purchase, 5-col table)
   - Banco Popular "Notificación de Retiro"   (ATM withdrawal, 5-col table)
   - Qik "Usaste tu tarjeta..."               (purchase, label/value table)
   - Qik "Se reversó una transacción..."      (reversal, label/value table)
+
+Parsers are pure: raw HTML in, Transaction out. They identify the card only
+as (bank, last4) — display labels belong to the caller's card registry.
 """
 
 from __future__ import annotations
@@ -14,16 +17,11 @@ from datetime import date, datetime
 
 from bs4 import BeautifulSoup
 
-from .models import Transaction, TxType
-
-# Banco Popular identifies the card only by its last 4 digits in the greeting.
-_POPULAR_CARDS = {
-    "1111": "Popular VISA ISI *1111",
-    "2222": "Popular Visa Débito Clásica *2222",
-}
+from .models import Bank, Transaction, TxType
 
 _MONEY_RE = re.compile(r"(RD\$|US\$)\s*([\d.,]+)")
-_LAST4_RE = re.compile(r"terminada en\s+(\d{4})")
+# Popular: "terminada en 1111" — Qik: "que termina en 53*...*3333" (masked PAN).
+_LAST4_RE = re.compile(r"termina(?:da)?\s+en\s+[\d*]*(\d{4})")
 _POPULAR_DATE_RE = re.compile(r"\b(\d{2}/\d{2}/\d{4})\b")
 
 
@@ -39,6 +37,11 @@ def _money(text: str) -> tuple[str, float] | None:
 
 def _to_dop(currency: str, value: float, usd_to_dop: float) -> float:
     return value if currency == "RD$" else round(value * usd_to_dop, 2)
+
+
+def _last4(text: str) -> str:
+    m = _LAST4_RE.search(text)
+    return m.group(1) if m else "????"
 
 
 def parse_email(
@@ -82,13 +85,10 @@ def _parse_popular(
         return None
     currency, value = money
 
-    last4_match = _LAST4_RE.search(text)
-    last4 = last4_match.group(1) if last4_match else "????"
-    card = _POPULAR_CARDS.get(last4, f"Popular *{last4}")
-
     return Transaction(
         message_id=message_id,
-        card=card,
+        bank=Bank.POPULAR,
+        last4=_last4(text),
         tx_type=tx_type,
         txn_date=datetime.strptime(fecha_str, "%d/%m/%Y").date(),
         merchant=merchant.strip(),
@@ -121,12 +121,13 @@ def _parse_qik(
     tx_type = TxType.REVERSAL if "revers" in subject.lower() else TxType.CONSUMO
 
     fields = _qik_label_values(html)
+    text = BeautifulSoup(html, "html.parser").get_text(" ", strip=True)
 
     amount_src = fields.get("Monto", "")
     money = _money(amount_src)
     if money is None:
         # Fall back to the intro sentence ("...de RD$ 2,031.75 en AMAZON...").
-        money = _money(BeautifulSoup(html, "html.parser").get_text(" ", strip=True))
+        money = _money(text)
     if money is None:
         return None
     currency, value = money
@@ -138,7 +139,8 @@ def _parse_qik(
 
     return Transaction(
         message_id=message_id,
-        card="Qik *3333",
+        bank=Bank.QIK,
+        last4=_last4(text),
         tx_type=tx_type,
         txn_date=txn_date,
         merchant=merchant.strip(),

@@ -25,6 +25,21 @@ Gmail (read-only) ──▶ parse ──▶ categorize ──▶ Google Sheet ro
 - **Dedupe:** the Sheet's `message_id` column is the source of truth (the
   read-only Gmail scope can't label messages).
 
+## Layout
+
+Monorepo, staged for the multi-user web version:
+
+```
+core/budgetcore/   # pure domain logic: parsers, categorize, dedupe, messages
+core/tests/        # fixture-driven tests for the core (no credentials needed)
+legacy/budgettracker/  # the single-user cron pipeline (Gmail/Sheets/Telegram I/O)
+legacy/tests/
+scripts/run.sh     # cron entry point; sets PYTHONPATH=core:legacy
+```
+
+`budgetcore` has no I/O and depends only on `beautifulsoup4`; everything
+Google/Telegram-specific stays in `legacy/budgettracker`.
+
 ## Setup
 
 ### 1. Python
@@ -64,6 +79,7 @@ cp config.example.toml config.toml   # then fill in the real values
 ## Run
 
 ```bash
+export PYTHONPATH=core:legacy            # or just use scripts/run.sh
 python -m budgettracker.main             # one polling pass
 python -m budgettracker.main --dry-run   # fetch + parse + print, no writes
 python -m budgettracker.main --backfill  # log this month's past txns (no Telegram)
@@ -100,7 +116,7 @@ pytest
 ```
 
 Parser tests run against fixtures derived from real notification emails
-(`tests/fixtures/`); no credentials needed.
+(`core/tests/fixtures/`); no credentials needed.
 
 ## Status
 
