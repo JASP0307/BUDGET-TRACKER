@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Correo {{ raw.processing_status }} — Admin{% endblock %}
+{% block content %}
+<p class="admin-back"><a href="/admin">← Volver al panel</a></p>
+
+<section class="card">
+  <div class="admin-line">
+    <h1 class="admin-h1" style="margin:0">{{ raw.subject or "(sin asunto)" }}</h1>
+    <span class="status-pill {{ raw.processing_status }}">{{ raw.processing_status }}</span>
+  </div>
+  <dl class="kv">
+    <dt>De</dt><dd class="num">{{ raw.from_addr or "—" }}</dd>
+    <dt>Recibido</dt><dd class="num">{{ raw.received_at.strftime("%Y-%m-%d %H:%M:%S") }}</dd>
+    <dt>Usuario</dt><dd>{{ owner_email or "— (sin ruta)" }}</dd>
+    <dt>Message ID</dt><dd class="num">{{ raw.provider_message_id or "—" }}</dd>
+    {% if raw.note %}<dt>Nota</dt><dd>{{ raw.note }}</dd>{% endif %}
+  </dl>
+  <form method="post" action="/admin/emails/{{ raw.id }}/delete">
+    <button class="quiet" type="submit">Eliminar del archivo</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2 class="section-title">Cuerpo</h2>
+  <pre class="raw-body">{{ body }}</pre>
+</section>
+
+{% if raw.headers %}
+<section class="card">
+  <h2 class="section-title">Encabezados</h2>
+  <ul class="hdr-list">
+    {% for name, value in raw.headers.items() %}
+    <li><span class="hdr-name">{{ name }}</span> <span class="num">{{ value }}</span></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}

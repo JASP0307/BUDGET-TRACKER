@@ -9,17 +9,25 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import Request
+from fastapi import Depends, HTTPException, Request
 from sqlalchemy import select
 
 from ..db import get_sessionmaker
 from ..models import User
+from ..settings import get_settings
 
 _SESSION_KEY = "user_id"
 
 
 class NotAuthenticated(Exception):
     """No valid logged-in user for a request that requires one."""
+
+
+def is_admin(user: User) -> bool:
+    """Single-owner admin for now: the account whose email matches
+    BUDGET_USER_EMAIL. Real roles arrive with an is_admin column once Alembic
+    is in place."""
+    return user.email.lower() == get_settings().default_user_email.lower()
 
 
 def login_user(request: Request, user: User) -> None:
@@ -48,6 +56,15 @@ def current_user(request: Request) -> User:
     if user is None or not user.is_verified:
         raise NotAuthenticated()
     request.state.user = user  # read by base.html for the header
+    request.state.is_admin = is_admin(user)  # read by base.html for the nav
+    return user
+
+
+def require_admin(user: User = Depends(current_user)) -> User:
+    """Dependency for admin-only pages. Non-admins get a 404 so the area's
+    existence isn't advertised."""
+    if not is_admin(user):
+        raise HTTPException(status_code=404)
     return user
 
 

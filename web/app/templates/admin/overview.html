@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Admin — Budget Tracker{% endblock %}
+{% block content %}
+<h1 class="admin-h1">Admin</h1>
+
+<div class="stat-row">
+  <div class="stat"><span class="stat-n num neg">{{ counts.get("failed", 0) }}</span>
+    <span class="stat-l">Fallidos</span></div>
+  <div class="stat"><span class="stat-n num">{{ counts.get("unrecognized", 0) }}</span>
+    <span class="stat-l">No reconocidos</span></div>
+  <div class="stat"><span class="stat-n num">{{ counts.get("skipped", 0) }}</span>
+    <span class="stat-l">Omitidos</span></div>
+  <div class="stat"><span class="stat-n num pos">{{ counts.get("processed", 0) }}</span>
+    <span class="stat-l">Procesados</span></div>
+</div>
+
+<section class="card">
+  <h2 class="section-title">Tasa de cambio · USD → DOP</h2>
+  {% if rates %}
+  <p style="margin-top:0">Vigente: <strong class="num">{{ "%.2f"|format(rates[0].rate) }}</strong>
+    <span class="muted">desde {{ rates[0].effective_date }}</span></p>
+  {% else %}
+  <p class="muted" style="margin-top:0">Sin tasas definidas — se usa el valor por
+    defecto (60.00) hasta que agregues una.</p>
+  {% endif %}
+  <form class="field-row" method="post" action="/admin/fx">
+    <input name="rate" type="number" step="0.01" min="0" placeholder="60.00"
+           class="amount" aria-label="Tasa USD a DOP" required>
+    <input name="effective_date" type="date" value="{{ today }}"
+           aria-label="Vigente desde" required>
+    <button type="submit">Agregar tasa</button>
+  </form>
+  {% if rates|length > 1 %}
+  <ul class="fx-history">
+    {% for r in rates %}
+    <li><span class="num">{{ "%.2f"|format(r.rate) }}</span>
+      <span class="muted">{{ r.effective_date }}</span></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+
+<section class="card">
+  <div class="admin-queue-head">
+    <h2 class="section-title" style="margin:0">Correos entrantes</h2>
+    <div class="filter-chips">
+      {% for key, (label, _) in filters.items() %}
+      <a href="/admin?status={{ key }}"
+         class="chip {{ 'active' if key == active_filter }}">{{ label }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if emails %}
+  <ul class="admin-list">
+    {% for e in emails %}
+    <li class="admin-row">
+      <a class="admin-main" href="/admin/emails/{{ e.id }}">
+        <div class="admin-line">
+          <span class="admin-subject">{{ e.subject or "(sin asunto)" }}</span>
+          <span class="status-pill {{ e.processing_status }}">{{ e.processing_status }}</span>
+        </div>
+        <div class="admin-meta">
+          <span>{{ e.from_addr or "(sin remitente)" }}</span>
+          <span class="num">{{ e.received_at.strftime("%Y-%m-%d %H:%M") }}</span>
+        </div>
+        {% if e.user_id and owners.get(e.user_id) %}
+        <div class="admin-owner muted">→ {{ owners[e.user_id] }}</div>{% endif %}
+        {% if e.note %}<div class="admin-note">{{ e.note }}</div>{% endif %}
+      </a>
+      <form class="inline" method="post" action="/admin/emails/{{ e.id }}/delete">
+        <button class="quiet" type="submit"
+                aria-label="Eliminar correo">Eliminar</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">No hay correos con este estado. 🎉</p>
+  {% endif %}
+</section>
+{% endblock %}
