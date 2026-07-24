@@ -29,6 +29,9 @@ class BankSpec:
 SUPPORTED_BANKS: tuple[BankSpec, ...] = (
     BankSpec(Bank.POPULAR, "Banco Popular", "notificaciones@popularenlinea.com"),
     BankSpec(Bank.QIK, "Qik", "notificaciones@qik.do"),
+    # BHD notifies card/account movement from Alertas@; the transfer alerts are
+    # the ones we log as spend (see parsers._parse_bhd).
+    BankSpec(Bank.BHD, "Banco BHD", "alertas@bhd.com.do"),
 )
 
 
