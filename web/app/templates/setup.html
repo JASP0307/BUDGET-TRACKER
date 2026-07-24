@@ -5,76 +5,30 @@
   <h1>Conecta tu correo</h1>
   <p class="lede">Reenvía las notificaciones de tus tarjetas y tus consumos
   aparecerán aquí solos. No compartes claves del banco — solo los correos que
-  tú eliges reenviar.</p>
+  tú eliges reenviar. Haz estos pasos desde una <strong>computadora</strong>.</p>
 
-  {# ---- Step 1: cards ---- #}
+  {% if inbound_addr %}
+  <p class="muted" style="margin-bottom:.35rem">Tu dirección personal de ingesta
+    (la usarás en los pasos de abajo):</p>
+  <div class="copybar">
+    <code id="inbound">{{ inbound_addr }}</code>
+    <button class="small-btn" type="button"
+            onclick="copyText('inbound', this)">Copiar</button>
+  </div>
+
+  {# ---- Step 1: forwarding address + confirmation ---- #}
   <section class="card step">
     <div class="step-head">
-      <span class="step-n {{ 'done' if cards }}">1</span>
-      <h2>Tus tarjetas</h2>
+      <span class="step-n {{ 'done' if confirmation }}" id="step-fwd">1</span>
+      <h2>Autoriza el reenvío</h2>
     </div>
-    {% if cards %}
-    <ul class="card-list">
-      {% for c in cards %}
-      <li class="card-row">
-        <form class="card-label-form" method="post" action="/cards/{{ c.id }}/label">
-          <span class="card-id num">{{ c.bank|capitalize }} ·{{ c.last4 }}</span>
-          {% if c.needs_review %}<span class="pill">Por confirmar</span>{% endif %}
-          <input name="label" value="{{ c.label or '' }}" placeholder="Etiqueta (opcional)"
-                 aria-label="Etiqueta de la tarjeta {{ c.last4 }}">
-          <button class="small-btn" type="submit">Guardar</button>
-        </form>
-        <form class="inline" method="post" action="/cards/{{ c.id }}/delete">
-          <button class="quiet" type="submit"
-                  aria-label="Quitar tarjeta {{ c.last4 }}">Quitar</button>
-        </form>
-      </li>
-      {% endfor %}
-    </ul>
-    {% else %}
-    <p class="muted">Aún no registras tarjetas. Agrega las que quieres seguir.</p>
-    {% endif %}
-
-    <form class="add-card field-row" method="post" action="/cards">
-      <select name="bank" aria-label="Banco">
-        {% for value, name in banks %}<option value="{{ value }}">{{ name }}</option>{% endfor %}
-      </select>
-      <input name="last4" inputmode="numeric" pattern="\d{4}" maxlength="4"
-             placeholder="Últimos 4" aria-label="Últimos 4 dígitos" required>
-      <input name="label" placeholder="Etiqueta (opcional)" aria-label="Etiqueta">
-      <button type="submit">Agregar tarjeta</button>
-    </form>
-  </section>
-
-  {# ---- Step 2: forwarding ---- #}
-  <section class="card step">
-    <div class="step-head">
-      <span class="step-n {{ 'done' if confirmation }}">2</span>
-      <h2>Reenvía tus notificaciones</h2>
-    </div>
-    {% if inbound_addr %}
-    <p class="muted" style="margin-top:0">Tu dirección personal de ingesta:</p>
-    <div class="copybar">
-      <code id="inbound">{{ inbound_addr }}</code>
-      <button class="small-btn" type="button"
-              onclick="copyText('inbound', this)">Copiar</button>
-    </div>
-
     <ol class="steps">
-      <li>En Gmail, entra a <strong>Configuración → Reenvío y correo POP/IMAP</strong>
-        y haz clic en <strong>Agregar una dirección de reenvío</strong>.</li>
-      <li>Pega la dirección de arriba. Google enviará una confirmación a esa
-        dirección — <strong>aparecerá aquí abajo automáticamente</strong>.</li>
-      <li>Usa el botón (o el código) que aparezca abajo para confirmar el reenvío.</li>
-      <li>Crea un filtro que reenvíe solo los correos de tus tarjetas. En el buscador
-        de Gmail usa esta consulta, crea un filtro y elige
-        <strong>Reenviar a</strong> tu dirección:
-        <div class="copybar">
-          <code id="filter">from:({{ bank_domains }})</code>
-          <button class="small-btn" type="button"
-                  onclick="copyText('filter', this)">Copiar</button>
-        </div>
-      </li>
+      <li>Abre <a class="link" href="https://mail.google.com/mail/u/0/#settings/fwdandpop"
+        target="_blank" rel="noopener">Gmail → Reenvío y correo POP/IMAP</a> y
+        haz clic en <strong>Agregar una dirección de reenvío</strong>.</li>
+      <li>Pega ahí <strong>tu dirección de ingesta</strong> (la de arriba) y
+        acepta. Google enviará una confirmación — <strong>aparecerá aquí abajo
+        automáticamente</strong>, no tienes que buscarla.</li>
     </ol>
 
     <div id="code-box" class="code-box {{ 'shown' if confirmation }}">
@@ -92,33 +46,117 @@
         {% endif %}
       </div>
     </div>
-    {% else %}
-    <p class="muted">No se pudo generar tu dirección de ingesta. Recarga la página
-      o contacta soporte.</p>
-    {% endif %}
   </section>
 
-  {# ---- Step 3: round-trip ---- #}
+  {# ---- Step 2: filter (one-click import) ---- #}
   <section class="card step">
     <div class="step-head">
-      <span class="step-n {{ 'done' if tx_count }}">3</span>
-      <h2>Confirma que funciona</h2>
+      <span class="step-n {{ 'done' if tx_count }}" id="step-filter">2</span>
+      <h2>Filtra solo tus tarjetas</h2>
     </div>
-    <div id="roundtrip">
-      {% if tx_count %}
-      <p class="status-line ok"><span class="check">✓</span>
-        ¡Listo! Ya recibimos transacciones de tus tarjetas.
-        <a href="/">Ver mi presupuesto</a></p>
-      {% else %}
-      <p class="status-line"><span class="dot"></span>
-        Haz una compra pequeña (o reenvía un correo reciente de tu tarjeta).
-        La primera transacción aparecerá aquí.</p>
-      {% endif %}
-    </div>
+    <p class="muted" style="margin-top:0">Para reenviar <em>solo</em> los correos
+      de tus tarjetas (y nada más de tu bandeja), importa este filtro listo:</p>
+    <ol class="steps">
+      <li><a class="cta-btn" href="/setup/gmail-filter.xml" download>Descargar
+        filtro</a></li>
+      <li>Abre <a class="link" href="https://mail.google.com/mail/u/0/#settings/filters"
+        target="_blank" rel="noopener">Gmail → Filtros y direcciones bloqueadas</a>,
+        baja hasta <strong>Importar filtros</strong>, elige el archivo descargado
+        y pulsa <strong>Crear filtros</strong>.</li>
+    </ol>
+    <details class="advanced">
+      <summary>Prefiero crearlo a mano</summary>
+      <p class="muted">Crea un filtro con esta búsqueda y elige la acción
+        <strong>Reenviar a</strong> tu dirección de ingesta:</p>
+      <div class="copybar">
+        <code id="filter">from:({{ bank_from_query }})</code>
+        <button class="small-btn" type="button"
+                onclick="copyText('filter', this)">Copiar</button>
+      </div>
+    </details>
   </section>
+
+  {# ---- Step 3: one-time backfill of the current month ---- #}
+  <section class="card step">
+    <div class="step-head">
+      <span class="step-n {{ 'done' if tx_count }}" id="step-backfill">3</span>
+      <h2>Trae tus consumos de este mes</h2>
+    </div>
+    <p class="muted" style="margin-top:0">El reenvío solo captura correos
+      <em>nuevos</em>. Para llenar tu tablero con lo que ya gastaste este mes,
+      reenvíanos esos correos una sola vez:</p>
+    <ol class="steps">
+      <li>En Gmail busca <code class="inline-code">from:({{ bank_from_query }})</code>
+        y selecciona los correos de este mes.</li>
+      <li>En el menú <strong>⋮ (Más)</strong> elige
+        <strong>Reenviar como archivo adjunto</strong> y envíalos a tu dirección
+        de ingesta.</li>
+      <li>Los verás aparecer abajo en unos segundos.</li>
+    </ol>
+    <p class="muted small">Opcional — puedes saltarte este paso y tus consumos se
+      irán registrando solos desde ahora.</p>
+  </section>
+
+  {# ---- Detected cards (review, only once they exist) ---- #}
+  {% if cards %}
+  <section class="card step">
+    <div class="step-head">
+      <span class="step-n done">✓</span>
+      <h2>Tus tarjetas</h2>
+    </div>
+    <p class="muted" style="margin-top:0">Detectamos estas tarjetas en tus
+      correos. Ponles una etiqueta si quieres (opcional):</p>
+    <ul class="card-list">
+      {% for c in cards %}
+      <li class="card-row">
+        <form class="card-label-form" method="post" action="/cards/{{ c.id }}/label">
+          <span class="card-id num">{{ c.bank|capitalize }} ·{{ c.last4 }}</span>
+          {% if c.needs_review %}<span class="pill">Nueva</span>{% endif %}
+          <input name="label" value="{{ c.label or '' }}" placeholder="Etiqueta (opcional)"
+                 aria-label="Etiqueta de la tarjeta {{ c.last4 }}">
+          <button class="small-btn" type="submit">Guardar</button>
+        </form>
+        <form class="inline" method="post" action="/cards/{{ c.id }}/delete">
+          <button class="quiet" type="submit"
+                  aria-label="Quitar tarjeta {{ c.last4 }}">Quitar</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {# ---- Round-trip / success ---- #}
+  <div id="roundtrip">
+    {% if tx_count %}
+    <p class="status-line ok"><span class="check">✓</span>
+      ¡Listo! Ya recibimos transacciones de tus tarjetas.
+      <a href="/">Ver mi presupuesto</a></p>
+    {% else %}
+    <p class="status-line"><span class="dot"></span>
+      En cuanto llegue tu primera transacción, aparecerá aquí.</p>
+    {% endif %}
+  </div>
+
+  <details class="advanced setup-more">
+    <summary>Agregar una tarjeta manualmente</summary>
+    <form class="add-card field-row" method="post" action="/cards">
+      <select name="bank" aria-label="Banco">
+        {% for value, name in banks %}<option value="{{ value }}">{{ name }}</option>{% endfor %}
+      </select>
+      <input name="last4" inputmode="numeric" pattern="\d{4}" maxlength="4"
+             placeholder="Últimos 4" aria-label="Últimos 4 dígitos" required>
+      <input name="label" placeholder="Etiqueta (opcional)" aria-label="Etiqueta">
+      <button type="submit">Agregar tarjeta</button>
+    </form>
+  </details>
 
   <p class="muted setup-more">¿Quieres un aviso al instante en cada compra?
     <a href="/notifications">Activa las alertas por Telegram</a>.</p>
+  {% else %}
+  <p class="muted">No se pudo generar tu dirección de ingesta. Recarga la página
+    o contacta soporte.</p>
+  {% endif %}
 </div>
 
 <script>
@@ -149,14 +187,18 @@
           '<strong class="num confirm-code">' + conf.value + '</strong>';
       }
       document.getElementById("code-box").classList.add("shown");
-      document.querySelectorAll('.step-n')[1].classList.add("done");
+      var s = document.getElementById("step-fwd");
+      if (s) s.classList.add("done");
     }
     function showTxn() {
       document.getElementById("roundtrip").innerHTML =
         '<p class="status-line ok"><span class="check">✓</span> ' +
         '¡Listo! Ya recibimos transacciones de tus tarjetas. ' +
         '<a href="/">Ver mi presupuesto</a></p>';
-      document.querySelectorAll('.step-n')[2].classList.add("done");
+      ["step-filter", "step-backfill"].forEach(function (id) {
+        var s = document.getElementById(id);
+        if (s) s.classList.add("done");
+      });
     }
 
     async function poll() {

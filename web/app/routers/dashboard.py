@@ -53,6 +53,13 @@ def _month_rows(session: Session, user_id, month_start: date) -> list[dict]:
 def home(request: Request, user: User = Depends(current_user)):
     month_start = date.today().replace(day=1)
     with get_sessionmaker()() as session:
+        # First-time users have no transactions yet — send them to onboarding
+        # instead of an empty dashboard. "No transactions ever" is the live
+        # signal for "still connecting", so no extra flag is needed.
+        any_txn = session.scalar(select(Transaction.id)
+                                 .where(Transaction.user_id == user.id).limit(1))
+        if any_txn is None:
+            return RedirectResponse("/setup", status_code=303)
         rows = _month_rows(session, user.id, month_start)
         recent = session.scalars(
             select(Transaction).where(Transaction.user_id == user.id)
