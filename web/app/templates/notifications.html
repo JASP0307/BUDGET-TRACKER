@@ -1,10 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Notificaciones — Budget Tracker{% endblock %}
+{% block title %}{{ t('Notificaciones') }} — Budget Tracker{% endblock %}
 {% block content %}
 <div class="setup">
-  <h1>Notificaciones</h1>
-  <p class="lede">Recibe un aviso al instante cuando uses una tarjeta, con lo que
-  te queda del presupuesto de esa categoría.</p>
+  <h1>{{ t('Notificaciones') }}</h1>
+  <p class="lede">{{ t('Recibe un aviso al instante cuando uses una tarjeta, con lo que te queda del presupuesto de esa categoría.') }}</p>
 
   <section class="card">
     <div class="notif-head">
@@ -12,17 +11,16 @@
         <span class="tg-mark" aria-hidden="true">✈</span>
         <div>
           <h2>Telegram</h2>
-          <p class="muted">Alertas por chat, gratis y al instante.</p>
+          <p class="muted">{{ t('Alertas por chat, gratis y al instante.') }}</p>
         </div>
       </div>
       {% if linked %}
-      <span class="status-line ok"><span class="check">✓</span> Conectado</span>
+      <span class="status-line ok"><span class="check">✓</span> {{ t('Conectado') }}</span>
       {% endif %}
     </div>
 
     {% if not bot_configured %}
-    <p class="muted">Las alertas por Telegram no están disponibles todavía en este
-    servidor.</p>
+    <p class="muted">{{ t('Las alertas por Telegram no están disponibles todavía en este servidor.') }}</p>
 
     {% elif linked %}
     <form class="toggle-row" method="post" action="/notifications/telegram/toggle">
@@ -31,24 +29,24 @@
                onchange="this.form.submit()">
         <span class="track"></span>
       </label>
-      <span>Alertas {{ "activadas" if enabled else "pausadas" }}</span>
+      <span>{{ t('Alertas') }} {{ t('activadas') if enabled else t('pausadas') }}</span>
     </form>
     <div class="field-row" style="margin-top:1rem">
       <form class="inline" method="post" action="/notifications/telegram/test">
-        <button class="small-btn" type="submit">Enviar mensaje de prueba</button>
+        <button class="small-btn" type="submit">{{ t('Enviar mensaje de prueba') }}</button>
       </form>
       <form class="inline" method="post" action="/notifications/telegram/disconnect">
-        <button class="quiet" type="submit">Desconectar</button>
+        <button class="quiet" type="submit">{{ t('Desconectar') }}</button>
       </form>
     </div>
 
     {% else %}
-    <p>Abre el chat con nuestro bot y presiona <strong>Iniciar</strong>. Quedarás
-    conectado automáticamente.</p>
+    <p>{{ t('Abre el chat con nuestro bot y presiona') }} <strong>{{ t('Iniciar') }}</strong>.
+    {{ t('Quedarás conectado automáticamente.') }}</p>
     <a class="cta-btn" href="{{ telegram_link }}" target="_blank" rel="noopener">
-      Conectar Telegram</a>
+      {{ t('Conectar Telegram') }}</a>
     <p class="muted" style="margin-top:.75rem; font-size:.85rem">
-      El enlace es personal y vence en 15 minutos. Si expira, recarga esta página.</p>
+      {{ t('El enlace es personal y vence en 15 minutos. Si expira, recarga esta página.') }}</p>
     {% endif %}
   </section>
 </div>

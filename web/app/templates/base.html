@@ -73,6 +73,16 @@
     display: flex; align-items: center; padding: .5rem;
   }
   .theme-toggle:hover { border-color: var(--muted); }
+  .lang-toggle {
+    display: inline-flex; border: 1px solid var(--line); border-radius: 8px;
+    overflow: hidden; font-size: .8rem;
+  }
+  .lang-toggle a {
+    text-decoration: none; color: var(--muted); padding: .4rem .5rem;
+    font-weight: 600; line-height: 1;
+  }
+  .lang-toggle a:hover { color: var(--ink); }
+  .lang-toggle a[aria-current="true"] { background: var(--brand); color: var(--btn-ink); }
   :root[data-theme="light"] .moon, :root[data-theme="dark"] .sun { display: none; }
   @media (max-width: 430px) { .brand-text { display: none; } nav a { padding: .5rem .45rem; } }
 
@@ -440,10 +450,11 @@
   <a class="brand" href="/"><span class="brand-mark">RD$</span><span class="brand-text">Budget</span></a>
   {% if request.state.user %}
   <nav>
-    <a href="/" {% if request.url.path == "/" %}aria-current="page"{% endif %}>Inicio</a>
-    <a href="/budgets" {% if request.url.path == "/budgets" %}aria-current="page"{% endif %}>Presupuesto</a>
-    <a href="/rules" {% if request.url.path == "/rules" %}aria-current="page"{% endif %}>Reglas</a>
-    <a href="/setup" {% if request.url.path == "/setup" %}aria-current="page"{% endif %}>Conectar</a>
+    <a href="/" {% if request.url.path == "/" %}aria-current="page"{% endif %}>{{ t('Inicio') }}</a>
+    <a href="/budgets" {% if request.url.path == "/budgets" %}aria-current="page"{% endif %}>{{ t('Presupuesto') }}</a>
+    <a href="/rules" {% if request.url.path == "/rules" %}aria-current="page"{% endif %}>{{ t('Reglas') }}</a>
+    <a href="/categories" {% if request.url.path == "/categories" %}aria-current="page"{% endif %}>{{ t('Categorías') }}</a>
+    <a href="/setup" {% if request.url.path == "/setup" %}aria-current="page"{% endif %}>{{ t('Conectar') }}</a>
     {% if request.state.is_admin %}
     <a href="/admin" {% if request.url.path.startswith("/admin") %}aria-current="page"{% endif %}>Admin</a>
     {% endif %}
@@ -451,13 +462,17 @@
   {% endif %}
   <div class="user-menu">
     {% if request.state.user %}
-    <a class="who" href="/notifications" title="Notificaciones">{{ request.state.user.email }}</a>
+    <a class="who" href="/notifications" title="{{ t('Notificaciones') }}">{{ request.state.user.email }}</a>
     <form class="inline" method="post" action="/logout">
-      <button class="quiet" type="submit">Salir</button>
+      <button class="quiet" type="submit">{{ t('Salir') }}</button>
     </form>
     {% endif %}
+    <span class="lang-toggle" role="group" aria-label="{{ t('Cambiar idioma') }}">
+      <a href="/lang/es?next={{ request.url.path }}" {% if lang == 'es' %}aria-current="true"{% endif %}>ES</a>
+      <a href="/lang/en?next={{ request.url.path }}" {% if lang == 'en' %}aria-current="true"{% endif %}>EN</a>
+    </span>
     <button class="theme-toggle" type="button" onclick="toggleTheme()"
-            aria-label="Cambiar entre tema claro y oscuro">
+            aria-label="{{ t('Cambiar entre tema claro y oscuro') }}">
       <svg class="sun" width="18" height="18" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
         <circle cx="12" cy="12" r="4"/>

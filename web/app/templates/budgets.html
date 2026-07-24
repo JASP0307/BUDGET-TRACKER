@@ -1,11 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Presupuesto — Budget Tracker{% endblock %}
+{% block title %}{{ t('Presupuesto') }} — Budget Tracker{% endblock %}
 {% block content %}
-{% set MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
-                "agosto", "septiembre", "octubre", "noviembre", "diciembre"] %}
 <section class="card">
-  <h2 class="section-title">Presupuesto · {{ MESES[month.month - 1] }} {{ month.year }}</h2>
-  <p class="muted" style="margin-top:0">Monto mensual por categoría, en RD$.</p>
+  <h2 class="section-title">{{ t('Presupuesto') }} · {{ meses[month.month - 1] }} {{ month.year }}</h2>
+  <p class="muted" style="margin-top:0">{{ t('Monto mensual por categoría, en RD$.') }}</p>
   <form method="post" action="/budgets">
     <ul class="cats">
       {% for r in rows %}
@@ -19,7 +17,7 @@
       </li>
       {% endfor %}
     </ul>
-    <p><button type="submit">Guardar cambios</button></p>
+    <p><button type="submit">{{ t('Guardar cambios') }}</button></p>
   </form>
 </section>
 {% endblock %}

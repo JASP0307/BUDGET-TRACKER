@@ -11,11 +11,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
-from fastapi.templating import Jinja2Templates
+from ..templating import templates
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -25,7 +24,6 @@ from ..db import get_sessionmaker
 from ..models import FxRate, RawEmail, User
 
 router = APIRouter(prefix="/admin")
-templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 
 # The statuses worth a human's attention, and the filters offered in the UI.
 PROBLEM = ("failed", "unrecognized")

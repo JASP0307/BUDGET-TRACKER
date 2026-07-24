@@ -14,12 +14,11 @@ from __future__ import annotations
 
 import re
 import uuid
-from pathlib import Path
 from xml.sax.saxutils import quoteattr
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse, Response
-from fastapi.templating import Jinja2Templates
+from ..templating import templates
 from sqlalchemy import func, select
 
 from budgetcore.banks import bank_choices, from_query
@@ -30,7 +29,6 @@ from ..models import Card, InboundAddress, RawEmail, Transaction, User
 from ..services.inbound import format_inbound_address
 
 router = APIRouter()
-templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 
 # Both derived from the bank registry (budgetcore.banks): the picker of banks a
 # user can register, and the Gmail from:(...) value shared by the copyable

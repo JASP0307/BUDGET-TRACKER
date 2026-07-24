@@ -1,9 +1,5 @@
 {% extends "base.html" %}
 {% block content %}
-{% set MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
-                "agosto", "septiembre", "octubre", "noviembre", "diciembre"] %}
-{% set MES_ABR = ["ene", "feb", "mar", "abr", "may", "jun", "jul",
-                  "ago", "sep", "oct", "nov", "dic"] %}
 {% set total_budget = rows | sum(attribute="budget") %}
 {% set total_spent = rows | sum(attribute="spent") %}
 {% set total_left = total_budget - total_spent %}
@@ -11,44 +7,43 @@
 {% if not recent %}
 <div class="card cta">
   <div>
-    <strong>Conecta tu correo para empezar.</strong>
-    <span class="muted">Reenvía las notificaciones de tus tarjetas y tus
-    consumos aparecerán aquí automáticamente.</span>
+    <strong>{{ t('Conecta tu correo para empezar.') }}</strong>
+    <span class="muted">{{ t('Reenvía las notificaciones de tus tarjetas y tus consumos aparecerán aquí automáticamente.') }}</span>
   </div>
-  <a class="cta-btn" href="/setup">Conectar correo</a>
+  <a class="cta-btn" href="/setup">{{ t('Conectar correo') }}</a>
 </div>
 {% endif %}
 
 {% if needs_review or problem_mail %}
 <div class="pills" style="margin-bottom:1rem">
-  {% if needs_review %}<a class="pill" href="/setup">🪪 {{ needs_review }} tarjeta(s) sin etiquetar</a>{% endif %}
-  {% if problem_mail %}<span class="pill">✉️ {{ problem_mail }} correo(s) sin procesar</span>{% endif %}
+  {% if needs_review %}<a class="pill" href="/setup">🪪 {{ needs_review }} {{ t('tarjeta(s) sin etiquetar') }}</a>{% endif %}
+  {% if problem_mail %}<span class="pill">✉️ {{ problem_mail }} {{ t('correo(s) sin procesar') }}</span>{% endif %}
 </div>
 {% endif %}
 
 <section class="card hero">
-  <p class="eyebrow">{{ MESES[month.month - 1] }} {{ month.year }}</p>
+  <p class="eyebrow">{{ meses[month.month - 1] }} {{ month.year }}</p>
   <p class="amount {{ 'neg' if total_left < 0 }}">
     <small>RD$</small> {{ "{:,.2f}".format(total_left) }}
   </p>
   {% if total_budget > 0 %}
   <p class="sub">
-    {% if total_left < 0 %}Presupuesto excedido —
-    {% else %}Disponible —
+    {% if total_left < 0 %}{{ t('Presupuesto excedido') }} —
+    {% else %}{{ t('Disponible') }} —
     {% endif %}
-    gastado RD$ {{ "{:,.0f}".format(total_spent) }} de
+    {{ t('gastado') }} RD$ {{ "{:,.0f}".format(total_spent) }} {{ t('de') }}
     RD$ {{ "{:,.0f}".format(total_budget) }}
     ({{ "%.0f" | format(total_spent / total_budget * 100) }}%)
   </p>
   {% else %}
-  <p class="sub">Sin presupuesto definido para este mes.
-    <a href="/budgets">Definir presupuesto</a></p>
+  <p class="sub">{{ t('Sin presupuesto definido para este mes.') }}
+    <a href="/budgets">{{ t('Definir presupuesto') }}</a></p>
   {% endif %}
 </section>
 
 <div class="grid cols">
 <section class="card">
-  <h2 class="section-title">Categorías</h2>
+  <h2 class="section-title">{{ t('Categorías') }}</h2>
   <ul class="cats">
     {% for r in rows %}
     <li class="cat {{ 'bad' if r.pct is not none and r.pct >= 100
@@ -62,13 +57,13 @@
       </div>
       <div class="cat-meta">
         {% if r.pct is not none %}
-        <span>{{ "{:,.0f}".format(r.spent) }} de {{ "{:,.0f}".format(r.budget) }}</span>
+        <span>{{ "{:,.0f}".format(r.spent) }} {{ t('de') }} {{ "{:,.0f}".format(r.budget) }}</span>
         <span>{{ "%.0f" | format(r.pct) }}%</span>
         {% elif r.spent != 0 %}
-        <span>{{ "{:,.0f}".format(r.spent) }} gastado</span>
-        <span>sin presupuesto</span>
+        <span>{{ "{:,.0f}".format(r.spent) }} {{ t('gastado') }}</span>
+        <span>{{ t('sin presupuesto') }}</span>
         {% else %}
-        <span>sin presupuesto</span>
+        <span>{{ t('sin presupuesto') }}</span>
         {% endif %}
       </div>
     </li>
@@ -77,29 +72,28 @@
 </section>
 
 <section class="card">
-  <h2 class="section-title">Movimientos recientes</h2>
+  <h2 class="section-title">{{ t('Movimientos recientes') }}</h2>
   <ul class="txns">
-    {% for t in recent %}
+    {% for tx in recent %}
     <li class="txn">
       <div class="txn-line">
-        <span class="txn-merchant">{{ t.merchant }}</span>
-        <span class="num {{ 'pos' if t.amount_dop < 0 }}">{{ "{:,.2f}".format(t.amount_dop) }}</span>
+        <span class="txn-merchant">{{ tx.merchant }}</span>
+        <span class="num {{ 'pos' if tx.amount_dop < 0 }}">{{ "{:,.2f}".format(tx.amount_dop) }}</span>
       </div>
       <div class="txn-meta">
-        <span class="num">{{ t.txn_date.day }} {{ MES_ABR[t.txn_date.month - 1] }} · {{ t.card.display }}</span>
-        <form class="inline" method="post" action="/transactions/{{ t.id }}/category">
-          <select name="category_id" aria-label="Categoría de {{ t.merchant }}"
+        <span class="num">{{ tx.txn_date.day }} {{ meses_abr[tx.txn_date.month - 1] }} · {{ tx.card.display }}</span>
+        <form class="inline" method="post" action="/transactions/{{ tx.id }}/category">
+          <select name="category_id" aria-label="{{ t('Categoría') }}"
                   onchange="this.form.submit()">
             {% for c in categories %}
-            <option value="{{ c.id }}" {{ "selected" if t.category_id == c.id else "" }}>{{ c.name }}</option>
+            <option value="{{ c.id }}" {{ "selected" if tx.category_id == c.id else "" }}>{{ c.name }}</option>
             {% endfor %}
           </select>
         </form>
       </div>
     </li>
     {% else %}
-    <li class="txn muted">Sin transacciones todavía. Los consumos que lleguen
-      por correo aparecerán aquí.</li>
+    <li class="txn muted">{{ t('Sin transacciones todavía. Los consumos que lleguen por correo aparecerán aquí.') }}</li>
     {% endfor %}
   </ul>
 </section>
@@ -107,7 +101,7 @@
 
 {% if inbound_addr %}
 <p class="muted" style="margin-top:1rem; font-size:.9rem">
-  Reenvía las notificaciones de tus tarjetas a <code>{{ inbound_addr }}</code>
+  {{ t('Reenvía las notificaciones de tus tarjetas a') }} <code>{{ inbound_addr }}</code>
 </p>
 {% endif %}
 {% endblock %}
