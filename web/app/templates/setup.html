@@ -49,7 +49,7 @@
   {# ---- Step 2: forwarding ---- #}
   <section class="card step">
     <div class="step-head">
-      <span class="step-n {{ 'done' if confirmation_code }}">2</span>
+      <span class="step-n {{ 'done' if confirmation }}">2</span>
       <h2>Reenvía tus notificaciones</h2>
     </div>
     {% if inbound_addr %}
@@ -63,9 +63,9 @@
     <ol class="steps">
       <li>En Gmail, entra a <strong>Configuración → Reenvío y correo POP/IMAP</strong>
         y haz clic en <strong>Agregar una dirección de reenvío</strong>.</li>
-      <li>Pega la dirección de arriba. Google enviará un código de confirmación a
-        esa dirección — <strong>aparecerá aquí abajo automáticamente</strong>.</li>
-      <li>Escribe ese código en Gmail para confirmar el reenvío.</li>
+      <li>Pega la dirección de arriba. Google enviará una confirmación a esa
+        dirección — <strong>aparecerá aquí abajo automáticamente</strong>.</li>
+      <li>Usa el botón (o el código) que aparezca abajo para confirmar el reenvío.</li>
       <li>Crea un filtro que reenvíe solo los correos de tus tarjetas. En el buscador
         de Gmail usa esta consulta, crea un filtro y elige
         <strong>Reenviar a</strong> tu dirección:
@@ -77,12 +77,20 @@
       </li>
     </ol>
 
-    <div id="code-box" class="code-box {{ 'shown' if confirmation_code }}">
-      <span class="muted">Código de confirmación de Google</span>
-      <strong id="code-value" class="num">{{ confirmation_code or '' }}</strong>
-      <span id="code-wait" class="status-line {{ 'hidden' if confirmation_code }}">
-        <span class="dot"></span> Esperando el código…
-      </span>
+    <div id="code-box" class="code-box {{ 'shown' if confirmation }}">
+      <div id="confirm-content">
+        {% if confirmation and confirmation.kind == 'link' %}
+        <span class="muted">Google envió un enlace de confirmación</span>
+        <a class="cta-btn" href="{{ confirmation.value }}" target="_blank"
+           rel="noopener">Confirmar reenvío en Gmail</a>
+        {% elif confirmation and confirmation.kind == 'code' %}
+        <span class="muted">Código de confirmación de Google</span>
+        <strong class="num confirm-code">{{ confirmation.value }}</strong>
+        {% else %}
+        <span class="status-line"><span class="dot"></span>
+          Esperando la confirmación de Google…</span>
+        {% endif %}
+      </div>
     </div>
     {% else %}
     <p class="muted">No se pudo generar tu dirección de ingesta. Recarga la página
@@ -124,14 +132,23 @@
   }
 
   (function () {
-    var haveCode = {{ 'true' if confirmation_code else 'false' }};
+    var haveConfirm = {{ 'true' if confirmation else 'false' }};
     var haveTxn = {{ 'true' if tx_count else 'false' }};
-    if (haveCode && haveTxn) return;  // nothing left to watch
+    if (haveConfirm && haveTxn) return;  // nothing left to watch
 
-    function showCode(code) {
-      document.getElementById("code-value").textContent = code;
+    function renderConfirmation(conf) {
+      var el = document.getElementById("confirm-content");
+      if (conf.kind === "link") {
+        el.innerHTML =
+          '<span class="muted">Google envió un enlace de confirmación</span>' +
+          '<a class="cta-btn" href="' + conf.value + '" target="_blank" ' +
+          'rel="noopener">Confirmar reenvío en Gmail</a>';
+      } else {
+        el.innerHTML =
+          '<span class="muted">Código de confirmación de Google</span>' +
+          '<strong class="num confirm-code">' + conf.value + '</strong>';
+      }
       document.getElementById("code-box").classList.add("shown");
-      document.getElementById("code-wait").classList.add("hidden");
       document.querySelectorAll('.step-n')[1].classList.add("done");
     }
     function showTxn() {
@@ -147,9 +164,9 @@
         var r = await fetch("/setup/status", {headers: {"Accept": "application/json"}});
         if (!r.ok) return;
         var s = await r.json();
-        if (!haveCode && s.confirmation_code) { haveCode = true; showCode(s.confirmation_code); }
+        if (!haveConfirm && s.confirmation) { haveConfirm = true; renderConfirmation(s.confirmation); }
         if (!haveTxn && s.tx_count > 0) { haveTxn = true; showTxn(); }
-        if (haveCode && haveTxn) clearInterval(timer);
+        if (haveConfirm && haveTxn) clearInterval(timer);
       } catch (e) { /* transient — keep polling */ }
     }
     var timer = setInterval(poll, 4000);

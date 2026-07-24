@@ -91,8 +91,21 @@ def test_status_surfaces_confirmation_code(client):
                        processing_status="confirmation", note="123456789"))
         s.commit()
     body = client.get("/setup/status").json()
-    assert body["confirmation_code"] == "123456789"
+    assert body["confirmation"] == {"kind": "code", "value": "123456789"}
     assert body["tx_count"] == 0
+
+
+def test_status_surfaces_confirmation_link(client):
+    uid = _signup_login(client, "s7@example.com")
+    from web.app.db import get_sessionmaker
+    from web.app.models import RawEmail
+    link = "https://mail.google.com/mail/vf-%5Babc%5D-xyz"
+    with get_sessionmaker()() as s:
+        s.add(RawEmail(user_id=uid, provider_message_id="c2",
+                       processing_status="confirmation", note=link))
+        s.commit()
+    body = client.get("/setup/status").json()
+    assert body["confirmation"] == {"kind": "link", "value": link}
 
 
 def test_cannot_touch_other_users_card(client):

@@ -33,7 +33,10 @@ KNOWN_BANK_DOMAINS = ("popularenlinea.com", "qik.do")
 GMAIL_CONFIRMATION_SENDER = "forwarding-noreply@google.com"
 _TOKEN_RE = re.compile(r"^u_([a-z0-9]{6,32})@", re.IGNORECASE)
 _HASH_RE = re.compile(r"^u_([a-z0-9]{6,32})$", re.IGNORECASE)  # Postmark MailboxHash
-_GMAIL_CODE_RE = re.compile(r"\b(\d{9})\b")  # Gmail's numeric confirmation code
+_GMAIL_CODE_RE = re.compile(r"\b(\d{9})\b")  # legacy numeric confirmation code
+# Modern Gmail forwarding-confirmation "click to confirm" link (vf- = verify).
+_GMAIL_CONFIRM_LINK_RE = re.compile(
+    r"https://mail(?:-settings)?\.google\.com/mail/vf-[^\s\"'<>]+")
 
 DEFAULT_USD_DOP = 60.0
 
@@ -79,12 +82,20 @@ def _process(session: Session, raw: RawEmail, payload: dict) -> None:
 
     sender = raw.from_addr.lower()
 
-    # 2. Gmail's forwarding-confirmation — surface the code for onboarding.
+    # 2. Gmail's forwarding-confirmation — surface it for onboarding. Modern
+    # Gmail sends a "click to confirm" link (vf-) and no numeric code, so prefer
+    # the link; fall back to the legacy 9-digit code if that's all there is.
     if GMAIL_CONFIRMATION_SENDER in sender:
         raw.processing_status = "confirmation"
         body = crypto.decrypt(raw.html_body)
-        m = _GMAIL_CODE_RE.search(body) or _GMAIL_CODE_RE.search(raw.subject)
-        raw.note = m.group(1) if m else "confirmation email (no code found)"
+        link = _GMAIL_CONFIRM_LINK_RE.search(body)
+        code = _GMAIL_CODE_RE.search(body) or _GMAIL_CODE_RE.search(raw.subject)
+        if link:
+            raw.note = link.group(0)
+        elif code:
+            raw.note = code.group(1)
+        else:
+            raw.note = "confirmation email (no code or link found)"
         return
 
     # 3. Spoofing guard: only mail originating from a known bank domain.

@@ -30,8 +30,7 @@ router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 
 BANKS = [("popular", "Banco Popular"), ("qik", "Qik")]
-# Gmail's forwarding-confirmation code is 9 digits (see ingest._GMAIL_CODE_RE).
-_CODE_RE = re.compile(r"^\d{6,}$")
+_CODE_RE = re.compile(r"^\d{6,}$")  # legacy numeric confirmation code
 _LAST4_RE = re.compile(r"^\d{4}$")
 
 
@@ -43,14 +42,20 @@ def _inbound_address(session, user_id) -> str | None:
     return format_inbound_address(inbound.token)
 
 
-def _latest_confirmation_code(session, user_id) -> str | None:
+def _latest_confirmation(session, user_id) -> dict | None:
+    """The most recent Gmail forwarding-confirmation to surface on /setup, as
+    ``{"kind": "link"|"code", "value": ...}``. Modern Gmail sends a click-to-
+    confirm link; older messages carried a numeric code."""
     raw = session.scalar(
         select(RawEmail).where(RawEmail.user_id == user_id,
                                RawEmail.processing_status == "confirmation")
         .order_by(RawEmail.received_at.desc()).limit(1))
-    if raw is None or not _CODE_RE.match(raw.note or ""):
-        return None
-    return raw.note
+    note = (raw.note if raw else "") or ""
+    if note.startswith("http"):
+        return {"kind": "link", "value": note}
+    if _CODE_RE.match(note):
+        return {"kind": "code", "value": note}
+    return None
 
 
 @router.get("/setup")
@@ -67,20 +72,20 @@ def setup_page(request: Request, user: User = Depends(current_user)):
             "inbound_addr": _inbound_address(session, user.id),
             "bank_domains": " OR ".join(d for d in
                                         ("popularenlinea.com", "qik.do")),
-            "confirmation_code": _latest_confirmation_code(session, user.id),
+            "confirmation": _latest_confirmation(session, user.id),
             "tx_count": tx_count,
         })
 
 
 @router.get("/setup/status")
 def setup_status(user: User = Depends(current_user)) -> dict:
-    """Polled by the setup page to surface the confirmation code and the
-    first transaction without a full reload."""
+    """Polled by the setup page to surface the confirmation (code or link) and
+    the first transaction without a full reload."""
     with get_sessionmaker()() as session:
         tx_count = session.scalar(select(func.count()).select_from(Transaction)
                                   .where(Transaction.user_id == user.id)) or 0
         return {
-            "confirmation_code": _latest_confirmation_code(session, user.id),
+            "confirmation": _latest_confirmation(session, user.id),
             "tx_count": int(tx_count),
         }
 

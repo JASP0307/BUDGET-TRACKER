@@ -142,6 +142,25 @@ def test_gmail_forwarding_confirmation_surfaces_code(client):
         assert raw.note == "123456789"
 
 
+def test_gmail_confirmation_surfaces_link(client):
+    """Modern Gmail sends a click-to-confirm (vf-) link and no numeric code —
+    the link is what gets stored and surfaced."""
+    link = ("https://mail.google.com/mail/vf-%5BANGjdJ9hIs3gYB76H8C"
+            "Ox0Hpl3B3SQH7L4RaGu27FMIjWYZ%5D-8sTdzE5gR0QN6zw20qnISrf73Ak")
+    resp = _post(client, _payload(
+        "m7", _token(client), sender="forwarding-noreply@google.com",
+        subject="(Gmail Forwarding Confirmation - Receive Mail from x@gmail.com",
+        html=f'<html>please click the link below to confirm: {link} '
+             f'to cancel: https://mail.google.com/mail/uf-%5Bxyz%5D-abc</html>'))
+    assert resp.json()["status"] == "confirmation"
+
+    from web.app.db import get_sessionmaker
+    from web.app.models import RawEmail
+    with get_sessionmaker()() as s:
+        raw = s.scalar(select(RawEmail))
+        assert raw.note == link  # the vf- confirm link, not the uf- cancel one
+
+
 def test_rule_applies_to_new_transactions(client):
     from web.app.db import get_sessionmaker
     from web.app.models import Category, Rule, User
