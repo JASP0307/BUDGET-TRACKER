@@ -8,23 +8,24 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
-from fastapi.templating import Jinja2Templates
+from ..templating import templates
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..auth.deps import current_user
+from budgetcore.categorize import UNCATEGORIZED
+
+from ..auth.deps import current_user, optional_user
 from ..db import get_sessionmaker
+from ..i18n import normalize_lang
 from ..models import (Budget, Card, Category, InboundAddress, RawEmail, Rule,
                       Transaction, User)
 from ..services.inbound import format_inbound_address
 from ..services.ingest import _next_month, recategorize_uncategorized
 
 router = APIRouter()
-templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 
 
 def _month_rows(session: Session, user_id, month_start: date) -> list[dict]:
@@ -53,6 +54,13 @@ def _month_rows(session: Session, user_id, month_start: date) -> list[dict]:
 def home(request: Request, user: User = Depends(current_user)):
     month_start = date.today().replace(day=1)
     with get_sessionmaker()() as session:
+        # First-time users have no transactions yet — send them to onboarding
+        # instead of an empty dashboard. "No transactions ever" is the live
+        # signal for "still connecting", so no extra flag is needed.
+        any_txn = session.scalar(select(Transaction.id)
+                                 .where(Transaction.user_id == user.id).limit(1))
+        if any_txn is None:
+            return RedirectResponse("/setup", status_code=303)
         rows = _month_rows(session, user.id, month_start)
         recent = session.scalars(
             select(Transaction).where(Transaction.user_id == user.id)
@@ -73,6 +81,28 @@ def home(request: Request, user: User = Depends(current_user)):
             "problem_mail": problem_mail,
             "inbound_addr": format_inbound_address(inbound.token) if inbound else None,
         })
+
+
+@router.get("/lang/{code}")
+def set_language(code: str, request: Request,
+                 user: User | None = Depends(optional_user)):
+    """Switch UI language. Stores a cookie the templates read, and persists it
+    to User.locale when signed in so it follows the account across devices.
+    Public so it works on the login/register pages too."""
+    lang = normalize_lang(code)
+    nxt = request.query_params.get("next", "/")
+    if not nxt.startswith("/"):  # only local redirects, never open-redirect
+        nxt = "/"
+    response = RedirectResponse(nxt, status_code=303)
+    response.set_cookie("lang", lang, max_age=60 * 60 * 24 * 365,
+                        samesite="lax", path="/")
+    if user is not None:
+        with get_sessionmaker()() as session:
+            db_user = session.get(User, user.id)
+            if db_user is not None:
+                db_user.locale = lang
+                session.commit()
+    return response
 
 
 @router.post("/transactions/{txn_id}/category")
@@ -123,6 +153,65 @@ def delete_rule(rule_id: uuid.UUID, user: User = Depends(current_user)):
             session.delete(rule)
             session.commit()
     return RedirectResponse("/rules", status_code=303)
+
+
+@router.get("/categories")
+def categories_page(request: Request, user: User = Depends(current_user)):
+    with get_sessionmaker()() as session:
+        cats = session.scalars(select(Category).where(Category.user_id == user.id)
+                               .order_by(Category.sort_order)).all()
+        # How many transactions each holds — context before a delete.
+        counts = dict(session.execute(
+            select(Transaction.category_id, func.count())
+            .where(Transaction.user_id == user.id)
+            .group_by(Transaction.category_id)).all())
+        return templates.TemplateResponse(request, "categories.html", {
+            "categories": cats,
+            "counts": {c.id: int(counts.get(c.id, 0)) for c in cats}})
+
+
+@router.post("/categories")
+def add_category(name: str = Form(...), user: User = Depends(current_user)):
+    name = name.strip()[:80]
+    with get_sessionmaker()() as session:
+        if name:
+            # Case-insensitive de-dupe so "Renta"/"renta" don't both exist.
+            exists = session.scalar(select(Category).where(
+                Category.user_id == user.id,
+                func.lower(Category.name) == name.lower()))
+            if exists is None:
+                max_order = session.scalar(select(func.max(Category.sort_order))
+                                           .where(Category.user_id == user.id)) or 0
+                session.add(Category(user_id=user.id, name=name,
+                                     sort_order=max_order + 1))
+                session.commit()
+    return RedirectResponse("/categories", status_code=303)
+
+
+@router.post("/categories/{category_id}/delete")
+def delete_category(category_id: uuid.UUID, user: User = Depends(current_user)):
+    """Remove a user category. Its transactions fall back to «Otros / sin
+    categoría»; rules and budgets that targeted it are dropped (both reference a
+    category that no longer exists). System categories cannot be deleted."""
+    with get_sessionmaker()() as session:
+        cat = session.get(Category, category_id)
+        if cat is None or cat.user_id != user.id or cat.is_system:
+            return RedirectResponse("/categories", status_code=303)
+        fallback = session.scalar(select(Category).where(
+            Category.user_id == user.id, Category.name == UNCATEGORIZED))
+        for txn in session.scalars(select(Transaction).where(
+                Transaction.user_id == user.id,
+                Transaction.category_id == cat.id)):
+            txn.category_id = fallback.id if fallback else None
+        for rule in session.scalars(select(Rule).where(
+                Rule.user_id == user.id, Rule.category_id == cat.id)):
+            session.delete(rule)
+        for budget in session.scalars(select(Budget).where(
+                Budget.user_id == user.id, Budget.category_id == cat.id)):
+            session.delete(budget)
+        session.delete(cat)
+        session.commit()
+    return RedirectResponse("/categories", status_code=303)
 
 
 @router.get("/budgets")

@@ -7,11 +7,10 @@ will slot in here as a second channel later.
 
 from __future__ import annotations
 
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
-from fastapi.templating import Jinja2Templates
+from ..templating import templates
 
 from ..auth.deps import current_user
 from ..db import get_sessionmaker
@@ -19,7 +18,6 @@ from ..models import User
 from ..services import notify, telegram
 
 router = APIRouter()
-templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 
 
 @router.get("/notifications")

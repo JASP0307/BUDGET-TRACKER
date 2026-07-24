@@ -7,13 +7,13 @@ emails a signed verification link; login is gated on a verified address.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
-from fastapi.templating import Jinja2Templates
+from ..templating import templates
 
 from ..db import get_sessionmaker
+from ..i18n import lang_from_locale
 from ..models import User
 from ..services.email import send_password_reset_email, send_verification_email
 from ..settings import get_settings
@@ -22,7 +22,6 @@ from .deps import login_user, logout_user, optional_user
 from .security import make_reset_token, make_verify_token, read_verify_token
 
 router = APIRouter()
-templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MIN_PASSWORD = 8
@@ -119,7 +118,11 @@ def login(request: Request, email: str = Form(...), password: str = Form(...)):
                 {"error": "Confirma tu correo antes de entrar. Te reenviamos "
                           "el enlace.", "email": email})
         login_user(request, user)
-    return RedirectResponse("/", status_code=303)
+        lang = lang_from_locale(user.locale)
+    response = RedirectResponse("/", status_code=303)
+    response.set_cookie("lang", lang, max_age=60 * 60 * 24 * 365,
+                        samesite="lax", path="/")
+    return response
 
 
 @router.post("/logout")

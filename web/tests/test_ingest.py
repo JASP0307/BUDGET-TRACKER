@@ -1,5 +1,7 @@
 """Webhook → pipeline tests using the real bank-email fixtures."""
 
+import base64
+from email.message import EmailMessage
 from pathlib import Path
 
 from sqlalchemy import select
@@ -8,6 +10,8 @@ FIXTURES = Path(__file__).parent.parent.parent / "core" / "tests" / "fixtures"
 
 QIK_SENDER = "notificaciones@qik.do"
 QIK_SUBJECT = "Usaste tu tarjeta de crédito Qik"
+POPULAR_SENDER = "notificaciones@popularenlinea.com"
+POPULAR_SUBJECT = "Notificación de Consumo"
 
 
 def _payload(message_id: str, to_token: str, sender=QIK_SENDER,
@@ -212,3 +216,82 @@ def test_retro_apply_leaves_manually_categorized_alone(client):
         s.commit()
     with get_sessionmaker()() as s:
         assert s.scalar(select(Transaction)).category.name == "Salidas"
+
+
+# ---- Backfill: "Forward as attachment" (message/rfc822 attachments) ----
+
+def _eml_attachment(sender: str, subject: str, fixture: str) -> dict:
+    """A Postmark attachment carrying one original bank email as an .eml, the
+    way Gmail's "Forward as attachment" packages a selected message."""
+    msg = EmailMessage()
+    msg["From"] = sender
+    msg["Subject"] = subject
+    msg["To"] = "me@gmail.com"
+    msg.set_content("(sin texto)")
+    msg.add_alternative((FIXTURES / fixture).read_text(encoding="utf-8"),
+                        subtype="html")
+    return {"Name": f"{fixture}.eml", "ContentType": "message/rfc822",
+            "Content": base64.b64encode(msg.as_bytes()).decode()}
+
+
+def _backfill_payload(message_id: str, to_token: str, attachments: list) -> dict:
+    return {
+        "MessageID": message_id,
+        "From": "me@gmail.com",  # the user's own forward, not a bank
+        "Subject": "Fwd: mis consumos",
+        "ToFull": [{"Email": f"u_{to_token}@in.example.do"}],
+        "HtmlBody": "<p>aquí están</p>",
+        "Attachments": attachments,
+        "Headers": [],
+    }
+
+
+def test_backfill_forward_as_attachment(client):
+    token = _token(client)
+    payload = _backfill_payload("bf1", token, [
+        _eml_attachment(QIK_SENDER, QIK_SUBJECT, "qik_purchase.html"),
+        _eml_attachment(POPULAR_SENDER, POPULAR_SUBJECT, "popular_consumo.html"),
+    ])
+    assert _post(client, payload).json() == {"status": "backfilled"}
+
+    from web.app.db import get_sessionmaker
+    from web.app.models import RawEmail, Transaction
+    with get_sessionmaker()() as s:
+        txns = s.scalars(select(Transaction)).all()
+        assert {t.merchant for t in txns} == {"AMAZON 1", "SUPERMERCADO EJEMPLO"}
+        # All transactions in the batch are archived under the one outer email.
+        raw = s.scalar(select(RawEmail).where(RawEmail.provider_message_id == "bf1"))
+        assert raw.processing_status == "backfilled"
+        assert "backfilled 2 transactions" in raw.note
+        assert all(t.raw_email_id == raw.id for t in txns)
+
+
+def test_backfill_does_not_double_count_live_charge(client):
+    """A charge already ingested live must not be re-counted when the user later
+    backfills the same email — content dedupe spans both paths."""
+    token = _token(client)
+    assert _post(client, _payload("live1", token)).json()["status"] == "processed"
+    payload = _backfill_payload("bf2", token, [
+        _eml_attachment(QIK_SENDER, QIK_SUBJECT, "qik_purchase.html")])
+    assert _post(client, payload).json() == {"status": "backfilled"}
+
+    from web.app.db import get_sessionmaker
+    from web.app.models import RawEmail, Transaction
+    with get_sessionmaker()() as s:
+        assert len(s.scalars(select(Transaction)).all()) == 1
+        raw = s.scalar(select(RawEmail).where(RawEmail.provider_message_id == "bf2"))
+        assert "backfilled 0 transactions (1 skipped)" in raw.note
+
+
+def test_backfill_skips_non_bank_attachment(client):
+    """The bank-domain guard applies per attachment, so a spoofed .eml inside a
+    backfill batch is dropped just like a spoofed live email."""
+    token = _token(client)
+    payload = _backfill_payload("bf3", token, [
+        _eml_attachment("attacker@evil.example", "Compra", "qik_purchase.html")])
+    assert _post(client, payload).json() == {"status": "backfilled"}
+
+    from web.app.db import get_sessionmaker
+    from web.app.models import Transaction
+    with get_sessionmaker()() as s:
+        assert s.scalar(select(Transaction)) is None

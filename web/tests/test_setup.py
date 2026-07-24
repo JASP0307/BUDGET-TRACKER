@@ -108,6 +108,49 @@ def test_status_surfaces_confirmation_link(client):
     assert body["confirmation"] == {"kind": "link", "value": link}
 
 
+def test_home_redirects_new_user_to_setup(client):
+    """A first-time user (no transactions yet) is routed into onboarding rather
+    than shown an empty dashboard."""
+    _signup_login(client, "r1@example.com")
+    r = client.get("/", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/setup"
+
+
+def test_home_shows_dashboard_once_a_txn_exists(client):
+    from datetime import date
+
+    from web.app.db import get_sessionmaker
+    from web.app.models import Card, Category, Transaction
+    uid = _signup_login(client, "r2@example.com")
+    with get_sessionmaker()() as s:
+        card = Card(user_id=uid, bank="qik", last4="3333")
+        s.add(card)
+        s.flush()
+        cat = s.scalar(select(Category).where(Category.user_id == uid,
+                                              Category.name == "Delivery"))
+        s.add(Transaction(user_id=uid, card_id=card.id, tx_type="consumo",
+                          merchant="X", txn_date=date.today(), original_amount=10,
+                          currency="RD$", amount_dop=10, category_id=cat.id,
+                          dedupe_key="k-r2"))
+        s.commit()
+    r = client.get("/", follow_redirects=False)
+    assert r.status_code == 200
+
+
+def test_gmail_filter_xml_contains_inbound_address(client):
+    from web.app.db import get_sessionmaker
+    from web.app.models import InboundAddress
+    uid = _signup_login(client, "r3@example.com")
+    with get_sessionmaker()() as s:
+        token = s.scalar(select(InboundAddress)
+                         .where(InboundAddress.user_id == uid)).token
+    r = client.get("/setup/gmail-filter.xml")
+    assert r.status_code == 200
+    assert "xml" in r.headers["content-type"]
+    assert f"u_{token}@in.example.do" in r.text
+    assert "forwardTo" in r.text
+
+
 def test_cannot_touch_other_users_card(client):
     b_uid = _signup_login(client, "b@example.com")
     client.post("/cards", data={"bank": "popular", "last4": "7777", "label": "B card"})

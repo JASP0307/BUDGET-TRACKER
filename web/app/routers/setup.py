@@ -14,12 +14,14 @@ from __future__ import annotations
 
 import re
 import uuid
-from pathlib import Path
+from xml.sax.saxutils import quoteattr
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import RedirectResponse
-from fastapi.templating import Jinja2Templates
+from fastapi.responses import RedirectResponse, Response
+from ..templating import templates
 from sqlalchemy import func, select
+
+from budgetcore.banks import bank_choices, from_query
 
 from ..auth.deps import current_user
 from ..db import get_sessionmaker
@@ -27,11 +29,35 @@ from ..models import Card, InboundAddress, RawEmail, Transaction, User
 from ..services.inbound import format_inbound_address
 
 router = APIRouter()
-templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 
-BANKS = [("popular", "Banco Popular"), ("qik", "Qik")]
+# Both derived from the bank registry (budgetcore.banks): the picker of banks a
+# user can register, and the Gmail from:(...) value shared by the copyable
+# search and the downloadable filter so what the user sees matches the import.
+BANKS = bank_choices()
+BANK_FROM_QUERY = from_query()
 _CODE_RE = re.compile(r"^\d{6,}$")  # legacy numeric confirmation code
 _LAST4_RE = re.compile(r"^\d{4}$")
+
+
+def _gmail_filter_xml(forward_to: str) -> str:
+    """A Gmail "Export filters" Atom document that forwards only bank mail to the
+    user's inbound address, so onboarding is Filters → Import → Create rather
+    than hand-building a filter. The forward address must already be a *confirmed*
+    forwarding address in the account (step 2) for Gmail to accept the import."""
+    return (
+        "<?xml version='1.0' encoding='UTF-8'?>\n"
+        "<feed xmlns='http://www.w3.org/2005/Atom' "
+        "xmlns:apps='http://schemas.google.com/apps/2006'>\n"
+        "  <title>Budget Tracker</title>\n"
+        "  <entry>\n"
+        "    <category term='filter'></category>\n"
+        "    <title>Reenviar notificaciones de tarjetas a Budget Tracker</title>\n"
+        "    <content></content>\n"
+        f"    <apps:property name='from' value={quoteattr(BANK_FROM_QUERY)}/>\n"
+        f"    <apps:property name='forwardTo' value={quoteattr(forward_to)}/>\n"
+        "  </entry>\n"
+        "</feed>\n"
+    )
 
 
 def _inbound_address(session, user_id) -> str | None:
@@ -70,11 +96,23 @@ def setup_page(request: Request, user: User = Depends(current_user)):
             "banks": BANKS,
             "cards": cards,
             "inbound_addr": _inbound_address(session, user.id),
-            "bank_domains": " OR ".join(d for d in
-                                        ("popularenlinea.com", "qik.do")),
+            "bank_from_query": BANK_FROM_QUERY,
             "confirmation": _latest_confirmation(session, user.id),
             "tx_count": tx_count,
         })
+
+
+@router.get("/setup/gmail-filter.xml")
+def gmail_filter(user: User = Depends(current_user)):
+    """Per-user Gmail filter the onboarding page offers for one-click import."""
+    with get_sessionmaker()() as session:
+        addr = _inbound_address(session, user.id)
+    if addr is None:
+        return Response(status_code=404)
+    return Response(
+        _gmail_filter_xml(addr), media_type="application/xml",
+        headers={"Content-Disposition":
+                 'attachment; filename="budget-tracker-gmail-filter.xml"'})
 
 
 @router.get("/setup/status")

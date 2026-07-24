@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}{{ t('Categorías') }} — Budget Tracker{% endblock %}
+{% block content %}
+<section class="card">
+  <h2 class="section-title">{{ t('Tus categorías') }}</h2>
+  <p class="muted" style="margin-top:0">{{ t('Crea las que se ajusten a tu presupuesto y quita las que no uses. Las de sistema no se pueden eliminar.') }}</p>
+  <ul class="txns">
+    {% for c in categories %}
+    <li class="txn">
+      <div class="txn-line">
+        <span>{{ c.name }}
+          {% if c.is_system %}<span class="pill">{{ t('Sistema') }}</span>{% endif %}
+          {% set n = counts[c.id] %}
+          {% if n %}<span class="muted small">· {{ n }} {{ t('transacción') if n == 1 else t('transacciones') }}</span>{% endif %}
+        </span>
+        {% if not c.is_system %}
+        <form class="inline" method="post" action="/categories/{{ c.id }}/delete"
+              onsubmit="return confirm('{{ t('¿Quitar') }} «{{ c.name }}»? {{ t('Sus transacciones pasarán a «Otros / sin categoría» y se borrarán sus reglas y presupuestos.') }}');">
+          <button class="quiet" aria-label="{{ t('Quitar') }} {{ c.name }}">{{ t('Quitar') }}</button>
+        </form>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section class="card">
+  <h2 class="section-title">{{ t('Nueva categoría') }}</h2>
+  <form method="post" action="/categories" class="field-row">
+    <input name="name" placeholder="{{ t('p. ej. Supermercado') }}" maxlength="80" required
+           aria-label="{{ t('Nombre de la categoría') }}">
+    <button type="submit">{{ t('Agregar categoría') }}</button>
+  </form>
+</section>
+{% endblock %}

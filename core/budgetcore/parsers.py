@@ -17,6 +17,7 @@ from datetime import date, datetime
 
 from bs4 import BeautifulSoup
 
+from .banks import SUPPORTED_BANKS
 from .models import Bank, Transaction, TxType
 
 _MONEY_RE = re.compile(r"(RD\$|US\$)\s*([\d.,]+)")
@@ -47,12 +48,16 @@ def _last4(text: str) -> str:
 def parse_email(
     message_id: str, sender: str, subject: str, html: str, *, usd_to_dop: float
 ) -> Transaction | None:
-    """Dispatch to the right parser. Returns None for non-transaction mail."""
+    """Dispatch to the right parser by matching the sender against the bank
+    registry. Returns None for mail from no known bank (or a bank with no
+    parser wired in ``_PARSERS`` yet)."""
     sender = sender.lower()
-    if "popularenlinea.com" in sender:
-        return _parse_popular(message_id, subject, html, usd_to_dop=usd_to_dop)
-    if "qik.do" in sender:
-        return _parse_qik(message_id, subject, html, usd_to_dop=usd_to_dop)
+    for spec in SUPPORTED_BANKS:
+        if spec.domain in sender:
+            parser = _PARSERS.get(spec.bank)
+            if parser is None:
+                return None
+            return parser(message_id, subject, html, usd_to_dop=usd_to_dop)
     return None
 
 
@@ -166,3 +171,59 @@ def _parse_qik_date(raw: str) -> date:
     """'07-15-2026 08:54 PM (AST)' -> date(2026, 7, 15). US-style MM-DD-YYYY."""
     cleaned = re.sub(r"\s*\(AST\)\s*", "", raw).strip()
     return datetime.strptime(cleaned, "%m-%d-%Y %I:%M %p").date()
+
+
+def _parse_bhd(
+    message_id: str, subject: str, html: str, *, usd_to_dop: float
+) -> Transaction | None:
+    """BHD transfer/payment alerts (``Alertas@bhd.com.do``). We log the *outgoing*
+    ones as spend: the beneficiary stands in for the merchant, the amount is
+    Monto, and the source account's last 4 digits identify the "card".
+
+    Incoming Pago al Instante (money received) has no ``idBeneficiario`` cell and
+    returns None — those are income, not spend. BHD's value cells carry stable
+    element ids, so we read fields by id rather than by column position."""
+    soup = BeautifulSoup(html, "html.parser")
+
+    beneficiary = soup.find(id="idBeneficiario")
+    if beneficiary is None:
+        return None  # incoming transfer or a non-transaction BHD email
+    merchant = beneficiary.get_text(" ", strip=True)
+    if not merchant:
+        return None
+
+    amount_cell = soup.find(id="idMonto")
+    money = _money(amount_cell.get_text(" ", strip=True)) if amount_cell else None
+    if money is None:
+        return None
+    currency, value = money
+
+    fecha_cell = soup.find(id="idFechayHoraTransaccion")
+    fecha = _POPULAR_DATE_RE.search(fecha_cell.get_text(" ", strip=True)
+                                    if fecha_cell else "")
+    if fecha is None:
+        return None
+
+    origin = soup.find(id="idProductoOrigen")
+    last4_m = re.search(r"(\d{4})\s*$", origin.get_text(strip=True)) if origin else None
+
+    return Transaction(
+        message_id=message_id,
+        bank=Bank.BHD,
+        last4=last4_m.group(1) if last4_m else "????",
+        tx_type=TxType.CONSUMO,
+        txn_date=datetime.strptime(fecha.group(1), "%d/%m/%Y").date(),
+        merchant=merchant,
+        amount_dop=_to_dop(currency, value, usd_to_dop),
+        original_amount=value,
+        currency=currency,
+    )
+
+
+# Which parser handles each supported bank. Adding a bank means a new BankSpec
+# in banks.py, a _parse_<bank> above, and one line here.
+_PARSERS = {
+    Bank.POPULAR: _parse_popular,
+    Bank.QIK: _parse_qik,
+    Bank.BHD: _parse_bhd,
+}

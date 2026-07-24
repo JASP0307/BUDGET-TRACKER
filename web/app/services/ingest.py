@@ -7,14 +7,18 @@ of an exception escaping the webhook — one bad email must never block others.
 
 from __future__ import annotations
 
+import base64
+import email
 import logging
 import re
 from dataclasses import replace
 from datetime import date
+from email import policy
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from budgetcore.banks import bank_domains
 from budgetcore.categorize import UNCATEGORIZED, categorize
 from budgetcore.dedupe import signature
 from budgetcore.parsers import parse_email
@@ -28,8 +32,8 @@ log = logging.getLogger("ingest")
 
 # Auto-forwarded Gmail keeps the original bank as the From header; anything
 # else mailed to an inbound address is either Gmail's forwarding-confirmation
-# or noise/spoofing.
-KNOWN_BANK_DOMAINS = ("popularenlinea.com", "qik.do")
+# or noise/spoofing. Derived from the bank registry (budgetcore.banks).
+KNOWN_BANK_DOMAINS = bank_domains()
 GMAIL_CONFIRMATION_SENDER = "forwarding-noreply@google.com"
 _TOKEN_RE = re.compile(r"^u_([a-z0-9]{6,32})@", re.IGNORECASE)
 _HASH_RE = re.compile(r"^u_([a-z0-9]{6,32})$", re.IGNORECASE)  # Postmark MailboxHash
@@ -80,6 +84,14 @@ def _process(session: Session, raw: RawEmail, payload: dict) -> None:
     raw.inbound_address_id = address.id
     raw.user_id = address.user_id
 
+    # 1b. Backfill: a "Forward as attachment" batch carries the original bank
+    # emails as message/rfc822 attachments. Process each; the outer forwarding
+    # message (From = the user's own Gmail) is not itself a transaction.
+    attachments = _eml_attachments(payload)
+    if attachments:
+        _process_attachments(session, raw, attachments)
+        return
+
     sender = raw.from_addr.lower()
 
     # 2. Gmail's forwarding-confirmation — surface it for onboarding. Modern
@@ -98,20 +110,37 @@ def _process(session: Session, raw: RawEmail, payload: dict) -> None:
             raw.note = "confirmation email (no code or link found)"
         return
 
+    # 3-8. Parse → card → categorize → dedupe → persist → notify.
+    status, note = _ingest_transaction(
+        session, raw, raw.from_addr, raw.subject, crypto.decrypt(raw.html_body),
+        message_id=raw.provider_message_id, notify_user=True)
+    raw.processing_status = status
+    raw.note = note
+
+
+def _ingest_transaction(session: Session, raw: RawEmail, from_addr: str,
+                        subject: str, html: str, *, message_id: str,
+                        notify_user: bool) -> tuple[str, str]:
+    """Parse one bank email (already routed to ``raw.user_id``) and persist a
+    transaction. Returns ``(status, note)`` for the caller to record — a live
+    single message adopts it directly; a backfill batch aggregates.
+
+    Shared by the live webhook path and the "forward as attachment" backfill,
+    so both apply the exact same spoofing guard, parser, categorization and
+    content dedupe. ``notify_user`` is False for backfill so importing a whole
+    month does not fire a Telegram alert per historical charge.
+    """
+    sender = (from_addr or "").lower()
+
     # 3. Spoofing guard: only mail originating from a known bank domain.
     if not any(d in sender for d in KNOWN_BANK_DOMAINS):
-        raw.processing_status = "skipped"
-        raw.note = f"sender not a known bank: {raw.from_addr}"
-        return
+        return "skipped", f"sender not a known bank: {from_addr}"
 
     # 4. Parse with budgetcore.
-    txn = parse_email(raw.provider_message_id, sender, raw.subject,
-                      crypto.decrypt(raw.html_body),
+    txn = parse_email(message_id, sender, subject, html,
                       usd_to_dop=current_fx_rate(session))
     if txn is None:
-        raw.processing_status = "skipped"
-        raw.note = "bank mail but not a loggable transaction (declined/marketing)"
-        return
+        return "skipped", "bank mail but not a loggable transaction (declined/marketing)"
 
     # 5. Card registry: never drop a transaction over an unregistered card.
     card = _get_or_create_card(session, raw.user_id, txn.bank.value, txn.last4)
@@ -125,16 +154,15 @@ def _process(session: Session, raw: RawEmail, payload: dict) -> None:
 
     # 7. Content dedupe. Key on the card's STABLE identity (bank+last4), not its
     # display label — a user relabeling a card must not make the same charge look
-    # new and double-count it.
+    # new and double-count it. This also collapses a backfilled charge against
+    # its live-forwarded twin (and vice-versa), since the key is content-based.
     card_key = f"{card.bank}:{card.last4}"
     key = "|".join(str(p) for p in signature(
         card_key, txn.txn_date, txn.merchant, txn.signed_amount()))
     duplicate = session.scalar(select(Transaction).where(
         Transaction.user_id == raw.user_id, Transaction.dedupe_key == key))
     if duplicate is not None:
-        raw.processing_status = "skipped"
-        raw.note = f"duplicate of transaction {duplicate.id}"
-        return
+        return "skipped", f"duplicate of transaction {duplicate.id}"
 
     row = Transaction(
         user_id=raw.user_id,
@@ -151,15 +179,71 @@ def _process(session: Session, raw: RawEmail, payload: dict) -> None:
         dedupe_key=key,
     )
     session.add(row)
-    raw.processing_status = "processed"
 
     # 8. Notify (best effort — a Telegram outage must not fail ingestion).
-    try:
-        spent, budget = month_spend_and_budget(
-            session, raw.user_id, category.id if category else None, txn.txn_date)
-        notify.transaction_alert(session, raw.user_id, txn, spent, budget)
-    except Exception:  # noqa: BLE001
-        log.exception("notification failed for raw_email %s", raw.id)
+    if notify_user:
+        try:
+            spent, budget = month_spend_and_budget(
+                session, raw.user_id, category.id if category else None,
+                txn.txn_date)
+            notify.transaction_alert(session, raw.user_id, txn, spent, budget)
+        except Exception:  # noqa: BLE001
+            log.exception("notification failed for raw_email %s", raw.id)
+    return "processed", ""
+
+
+def _eml_attachments(payload: dict) -> list[dict]:
+    """The forwarded bank emails inside a "forward as attachment" batch: the
+    Postmark attachments whose type is message/rfc822 (or name ends .eml)."""
+    out = []
+    for att in payload.get("Attachments", []) or []:
+        if not isinstance(att, dict):
+            continue
+        ctype = (att.get("ContentType") or "").lower()
+        name = (att.get("Name") or "").lower()
+        if ctype.startswith("message/rfc822") or name.endswith(".eml"):
+            out.append(att)
+    return out
+
+
+def _process_attachments(session: Session, raw: RawEmail,
+                         attachments: list[dict]) -> None:
+    """Ingest each forwarded bank email in a backfill batch. One archival
+    RawEmail (the outer forward) owns all the resulting transactions; a bad
+    attachment is counted and skipped, never aborting the rest."""
+    processed = skipped = 0
+    for i, att in enumerate(attachments):
+        try:
+            data = base64.b64decode(att.get("Content", "") or "")
+            sender, subject, html = _parse_eml(data)
+            status, _ = _ingest_transaction(
+                session, raw, sender, subject, html,
+                message_id=f"{raw.provider_message_id}:{i}", notify_user=False)
+        except Exception:  # noqa: BLE001 — one bad attachment must not block the batch
+            log.exception("backfill attachment %d failed for raw_email %s", i, raw.id)
+            status = "failed"
+        processed += status == "processed"
+        skipped += status != "processed"
+    raw.processing_status = "backfilled"
+    raw.note = f"backfilled {processed} transactions ({skipped} skipped)"
+
+
+def _parse_eml(data: bytes) -> tuple[str, str, str]:
+    """Pull (From, Subject, body-HTML) out of a raw .eml. Prefers the text/html
+    part, falling back to text/plain; attachments within the .eml are ignored."""
+    msg = email.message_from_bytes(data, policy=policy.default)
+    html = plain = ""
+    for part in msg.walk():
+        if part.get_content_maintype() == "multipart":
+            continue
+        if part.get_content_disposition() == "attachment":
+            continue
+        ctype = part.get_content_type()
+        if ctype == "text/html" and not html:
+            html = part.get_content()
+        elif ctype == "text/plain" and not plain:
+            plain = part.get_content()
+    return msg.get("From", "") or "", msg.get("Subject", "") or "", html or plain
 
 
 def _route(session: Session, payload: dict):

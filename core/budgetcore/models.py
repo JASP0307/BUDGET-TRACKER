@@ -10,6 +10,7 @@ from enum import Enum
 class Bank(str, Enum):
     POPULAR = "popular"
     QIK = "qik"
+    BHD = "bhd"
 
 
 class TxType(str, Enum):

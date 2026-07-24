@@ -115,3 +115,26 @@ def test_marketing_email_returns_none():
     assert parse_email("m7", "popularteinforma@popularenlinea.com",
                        "¿Sabías que...?", "<html><body>promo</body></html>",
                        usd_to_dop=RATE) is None
+
+
+BHD = "Alertas@bhd.com.do"
+
+
+def test_bhd_outgoing_transfer_is_spend():
+    txn = parse_email("b1", BHD, "Transacciones entre productos BHD y a otros Bancos",
+                      _load("bhd_transferencia.html"), usd_to_dop=RATE)
+    assert txn is not None
+    assert txn.tx_type is TxType.CONSUMO
+    assert txn.bank is Bank.BHD
+    assert txn.last4 == "4444"  # source account, stands in for the card
+    assert txn.txn_date == date(2025, 11, 26)
+    assert txn.merchant == "BENEFICIARIO PRUEBA, ANA M"  # beneficiary as merchant
+    assert txn.currency == "RD$"
+    assert txn.amount_dop == pytest.approx(250.00)
+
+
+def test_bhd_incoming_transfer_is_ignored():
+    # Money received (Pago al Instante) has no beneficiary — it's income, not spend.
+    txn = parse_email("b2", "Notificaciones@bhd.com.do", "Notificaciones",
+                      _load("bhd_recibido.html"), usd_to_dop=RATE)
+    assert txn is None

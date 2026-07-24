@@ -1,18 +1,17 @@
 {% extends "base.html" %}
-{% block title %}Restablecer contraseña — Budget Tracker{% endblock %}
+{% block title %}{{ t('Restablecer contraseña') }} — Budget Tracker{% endblock %}
 {% block content %}
 <div class="auth-wrap">
-  <h1>Restablecer contraseña</h1>
-  <p class="lede">Escribe tu correo y te enviaremos un enlace para crear una
-  contraseña nueva.</p>
+  <h1>{{ t('Restablecer contraseña') }}</h1>
+  <p class="lede">{{ t('Escribe tu correo y te enviaremos un enlace para crear una contraseña nueva.') }}</p>
   <form method="post" action="/forgot">
     <div class="field">
-      <label for="email">Correo</label>
+      <label for="email">{{ t('Correo') }}</label>
       <input id="email" name="email" type="email" autocomplete="email"
              required autofocus>
     </div>
-    <button class="block" type="submit">Enviar enlace</button>
+    <button class="block" type="submit">{{ t('Enviar enlace') }}</button>
   </form>
-  <p class="alt-link"><a href="/login">Volver a iniciar sesión</a></p>
+  <p class="alt-link"><a href="/login">{{ t('Volver a iniciar sesión') }}</a></p>
 </div>
 {% endblock %}
