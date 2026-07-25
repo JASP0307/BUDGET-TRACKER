@@ -92,6 +92,36 @@ The multi-user web app is a separate deployment (`docker-compose.yml` → Postgr
 Never expose `docker-compose.lan.yml` — it runs plain HTTP with
 `BUDGET_ENV=development`, so cookies aren't Secure and the secret guard is off.
 
+### The Cloudflare quick tunnel (current public access)
+
+The Lenovo instance is reachable from the internet through
+`cloudflared tunnel --url http://localhost:8000`, **not** through the Caddy stack
+— so the HSTS headers and Postmark IP allowlist in the `Caddyfile` do not apply
+here. Cloudflare terminates TLS, which is why `BUDGET_ENV=production` and its
+https-only rules are correct on this box.
+
+A quick tunnel gets a **new random hostname every time cloudflared starts**, and
+`BUDGET_BASE_URL` is baked into every verification and reset email. After a
+restart the app keeps mailing links to a hostname that no longer resolves —
+silently, with no error anywhere. `cloudflared` is also unsupervised (no systemd
+unit), so a reboot leaves no tunnel at all.
+
+`scripts/sync-tunnel-url.sh` is the stopgap. Every 5 minutes (and 30s after
+reboot) it restarts cloudflared if it died, reads the live hostname from
+cloudflared's `/quicktunnel` metrics endpoint, rewrites `BUDGET_BASE_URL` if it
+drifted, and restarts uvicorn so the new value reaches its environment. It
+no-ops when the URL already matches, and a restart does **not** log anyone out
+(the session cookie is signed with `BUDGET_SESSION_SECRET`, which it never
+touches). Preview with `--dry-run`; output goes to `tunnel.log`.
+
+Crontab entries are already installed and guarded on `[ -x … ]`, so they stay
+silent until this script is deployed.
+
+**This is a stopgap, not the answer.** A random hostname can't be trusted by
+users, bookmarked, or given to Postmark as a stable webhook target. Buy the
+domain and move to a named tunnel (or the VPS + Caddy stack) before anyone
+outside your own test accounts uses this — see TASKS.md.
+
 ### One-off migration for an existing database (2026-07-25)
 
 `main.py` still uses `create_all`, which creates missing *tables* but never adds
