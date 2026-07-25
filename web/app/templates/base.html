@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#F2F4F1">
-<title>{% block title %}Budget Tracker{% endblock %}</title>
+<title>{% block title %}Cualto{% endblock %}</title>
 <script>
   (function () {
     var t = localStorage.getItem("theme");
@@ -476,7 +476,7 @@
 </head>
 <body>
 <header>
-  <a class="brand" href="/"><span class="brand-mark">RD$</span><span class="brand-text">Budget</span></a>
+  <a class="brand" href="/"><span class="brand-mark">RD$</span><span class="brand-text">Cualto</span></a>
   {% if request.state.user %}
   <nav>
     <a href="/" {% if request.url.path == "/" %}aria-current="page"{% endif %}>{{ t('Inicio') }}</a>

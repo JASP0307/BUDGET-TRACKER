@@ -59,5 +59,5 @@ def test_telegram(user: User = Depends(current_user)):
         pref = notify.get_pref(session, user.id, notify.TELEGRAM)
         chat_id = pref.telegram_chat_id if pref else None
     if chat_id:
-        telegram.send_message(chat_id, "🔔 Mensaje de prueba de Budget Tracker.")
+        telegram.send_message(chat_id, "🔔 Mensaje de prueba de Cualto.")
     return RedirectResponse("/notifications", status_code=303)

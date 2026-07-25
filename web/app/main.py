@@ -41,7 +41,7 @@ async def _lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    app = FastAPI(title="Budget Tracker", lifespan=_lifespan)
+    app = FastAPI(title="Cualto", lifespan=_lifespan)
     # https_only marks the cookie Secure — required in production so the session
     # can never ride an accidental plaintext request; off in dev, where there is
     # no TLS. same_site="lax" is what blocks cross-site form POSTs.

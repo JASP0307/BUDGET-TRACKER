@@ -39,8 +39,8 @@ def send_email(to: str, subject: str, text_body: str) -> None:
 def send_verification_email(to: str, verify_url: str) -> None:
     send_email(
         to,
-        "Confirma tu correo — Budget Tracker",
-        "¡Bienvenido a Budget Tracker!\n\n"
+        "Confirma tu correo — Cualto",
+        "¡Bienvenido a Cualto!\n\n"
         "Confirma tu correo para activar tu cuenta:\n\n"
         f"{verify_url}\n\n"
         "El enlace vence en 24 horas. Si no creaste esta cuenta, ignora "
@@ -51,7 +51,7 @@ def send_verification_email(to: str, verify_url: str) -> None:
 def send_password_reset_email(to: str, reset_url: str) -> None:
     send_email(
         to,
-        "Restablece tu contraseña — Budget Tracker",
+        "Restablece tu contraseña — Cualto",
         "Recibimos una solicitud para restablecer tu contraseña.\n\n"
         "Crea una nueva desde este enlace:\n\n"
         f"{reset_url}\n\n"
