@@ -1,0 +1,14 @@
+/* Cualto design system — stylesheet entry point.
+ *
+ * Rendered designs receive ONLY this file's transitive @import closure,
+ * so everything real must be reachable from here.
+ *
+ * Both imported files are extracted verbatim from the running app
+ * (web/app/templates/base.html) by scripts/build_ds_bundle.py.
+ * Edit base.html and re-run that script — never hand-edit the outputs.
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500;700&display=swap");
+
+@import url("./tokens/tokens.css");
+@import url("./_ds_bundle.css");

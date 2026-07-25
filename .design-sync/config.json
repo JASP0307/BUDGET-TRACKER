@@ -1,0 +1,7 @@
+{
+  "projectId": "ab351907-03e1-4999-b3a8-0c8115c80ccb",
+  "shape": "package",
+  "offScript": true,
+  "readmeHeader": ".design-sync/conventions.md",
+  "notes": "Off-script sync. This repo has no JS component source (Python/FastAPI + Jinja templates + one inline stylesheet), so package-build.mjs cannot run and no _ds_bundle.js is produced. The bundle is authored by hand as a styles-only design system: tokens, preview cards, and the extracted app stylesheet. See .design-sync/NOTES.md."
+}

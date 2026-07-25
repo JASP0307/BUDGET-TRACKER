@@ -1,0 +1,20 @@
+/* Design tokens — extracted verbatim from web/app/templates/base.html
+   by scripts/build_ds_bundle.py. Single source of truth for color and type.
+   Do not fork these values; edit base.html and re-run the script. */
+
+:root {
+  --font-ui: "Instrument Sans", system-ui, sans-serif;
+  --font-mono: "Spline Sans Mono", ui-monospace, SFMono-Regular, monospace;
+  --bg: #F2F4F1; --card: #FFFFFF; --ink: #182420; --muted: #5C6B63;
+  --line: #DEE5DF; --brand: #0E6B4A;
+  --good: #0E6B4A; --warn: #9A6700; --bad: #B3372E;
+  --btn-ink: #FFFFFF;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --bg: #101613; --card: #18211C; --ink: #E6ECE7; --muted: #8FA096;
+  --line: #27332C; --brand: #4CB98A;
+  --good: #4CB98A; --warn: #D9A03C; --bad: #E06056;
+  --btn-ink: #0E1512;
+  color-scheme: dark;
+}
