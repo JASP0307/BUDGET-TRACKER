@@ -1,24 +1,32 @@
 """Resolve (bank, last4) to this deployment's card display labels.
 
-The single-user pipeline knows its three cards; the multi-user web app
-resolves against each user's registered cards instead. Labels must stay
-byte-identical to the Sheet's existing rows — they feed the dedupe signature.
+The single-user pipeline knows its own cards; the multi-user web app resolves
+against each user's registered cards instead. Labels must stay byte-identical to
+the Sheet's existing rows — they feed the dedupe signature, so a changed label
+would re-log every old charge as new.
+
+The mapping therefore lives in `config.toml` (`[cards.labels]`, git-ignored)
+rather than in this file: it is deployment-specific data, and a card's last four
+digits are personal enough not to belong in a public repo. With no mapping the
+label falls back to the generic `Bank *last4` form — right for a fresh install,
+but on a deployment whose Sheet already holds labelled rows it *would* change the
+dedupe signature, so keep the real mapping in config.
 """
 
 from __future__ import annotations
 
 from dataclasses import replace
 
-from budgetcore.models import Bank, Transaction
-
-_LABELS = {
-    (Bank.POPULAR, "1111"): "Popular VISA ISI *1111",
-    (Bank.POPULAR, "2222"): "Popular Visa Débito Clásica *2222",
-    (Bank.QIK, "3333"): "Qik *3333",
-}
+from budgetcore.models import Transaction
 
 
-def resolve_card(txn: Transaction) -> Transaction:
-    """Return a copy of `txn` with its display label set."""
-    label = _LABELS.get((txn.bank, txn.last4))
+def label_key(txn: Transaction) -> str:
+    """The `[cards.labels]` key for a transaction: "<bank>:<last4>"."""
+    return f"{txn.bank.value}:{txn.last4}"
+
+
+def resolve_card(txn: Transaction,
+                 labels: dict[str, str] | None = None) -> Transaction:
+    """Return a copy of `txn` with its display label set from `labels`."""
+    label = (labels or {}).get(label_key(txn))
     return replace(txn, card=label or txn.card_label)

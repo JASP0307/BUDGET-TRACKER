@@ -28,7 +28,7 @@ def test_popular_consumo_rdollar():
     assert txn.bank is Bank.POPULAR
     assert txn.last4 == "1111"
     assert txn.card is None  # labeling belongs to the caller's card registry
-    assert txn.txn_date == date(2026, 7, 19)
+    assert txn.txn_date == date(2025, 7, 19)
     assert txn.merchant == "SUPERMERCADO EJEMPLO"
     assert txn.currency == "RD$"
     assert txn.amount_dop == pytest.approx(1089.90)
@@ -44,7 +44,7 @@ def test_popular_consumo_wrapped_dom():
     assert (txn.bank, txn.last4) == (Bank.POPULAR, "1111")
     assert txn.merchant == "SUPERMERCADO EJEMPLO"
     assert txn.amount_dop == pytest.approx(1089.90)
-    assert txn.txn_date == date(2026, 7, 19)
+    assert txn.txn_date == date(2025, 7, 19)
 
 
 def test_popular_consumo_usd_is_converted():
@@ -62,7 +62,7 @@ def test_popular_retiro_maps_to_cash_category():
                       _load("popular_retiro.html"), usd_to_dop=RATE)
     assert txn is not None
     assert txn.tx_type is TxType.RETIRO
-    assert txn.txn_date == date(2026, 5, 16)
+    assert txn.txn_date == date(2025, 5, 16)
     assert txn.amount_dop == pytest.approx(600.00)
     txn = categorize(txn, rules={})
     assert txn.category == "Retiro Efectivo"
@@ -80,7 +80,7 @@ def test_qik_purchase():
     assert txn is not None
     assert txn.tx_type is TxType.CONSUMO
     assert (txn.bank, txn.last4) == (Bank.QIK, "3333")
-    assert txn.txn_date == date(2026, 7, 15)
+    assert txn.txn_date == date(2025, 7, 15)
     assert txn.merchant == "AMAZON 1"
     assert txn.amount_dop == pytest.approx(2031.75)
 
@@ -127,7 +127,7 @@ def test_bhd_outgoing_transfer_is_spend():
     assert txn.tx_type is TxType.CONSUMO
     assert txn.bank is Bank.BHD
     assert txn.last4 == "4444"  # source account, stands in for the card
-    assert txn.txn_date == date(2025, 11, 26)
+    assert txn.txn_date == date(2024, 11, 26)
     assert txn.merchant == "BENEFICIARIO PRUEBA, ANA M"  # beneficiary as merchant
     assert txn.currency == "RD$"
     assert txn.amount_dop == pytest.approx(250.00)
@@ -156,8 +156,8 @@ def test_bhd_card_purchase_is_spend():
     assert txn.bank is Bank.BHD
     assert txn.tx_type is TxType.CONSUMO
     assert txn.last4 == "5555"  # from "Mastercard Mujer Red # 5555"
-    assert txn.txn_date == date(2026, 7, 13)
-    assert txn.merchant == "BravoVa #1234567"  # the Comercio column
+    assert txn.txn_date == date(2025, 7, 13)
+    assert txn.merchant == "TiendaEj #1234567"  # the Comercio column
     assert txn.currency == "RD$"
     assert txn.amount_dop == pytest.approx(5177.00)
     assert txn.signed_amount() == pytest.approx(5177.00)
@@ -170,7 +170,7 @@ def test_bhd_card_purchase_reversal_is_negative():
     assert txn is not None
     assert txn.tx_type is TxType.REVERSAL
     assert txn.last4 == "5555"
-    assert txn.txn_date == date(2026, 7, 7)
+    assert txn.txn_date == date(2025, 7, 7)
     assert txn.merchant == "Consumo BHD"  # reversal row has no Comercio
     assert txn.amount_dop == pytest.approx(4857.00)
     assert txn.signed_amount() == pytest.approx(-4857.00)  # refund self-corrects

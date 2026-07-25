@@ -25,6 +25,17 @@ budget_tab = "Presupuesto"
 bot_token = "PUT_BOTFATHER_TOKEN_HERE"
 chat_id = "PUT_YOUR_CHAT_ID_HERE"
 
+# Display label per card, keyed "<bank>:<last4>" (bank is the budgetcore.Bank
+# value: popular, qik, bhd). Optional — without an entry a card is labelled
+# "Popular *1234" automatically.
+#
+# WARNING: these labels feed the dedupe signature written to the Sheet. Once a
+# label has been used, changing it makes every past charge on that card look new
+# and they will be re-logged. Set them before your first run and leave them.
+[cards.labels]
+# "popular:1234" = "Popular VISA *1234"
+# "qik:5678"     = "Qik *5678"
+
 # Merchant substring -> category. First case-insensitive match wins.
 # Unmatched merchants fall back to "Otros / sin categoría" and are flagged.
 [categorize.rules]
