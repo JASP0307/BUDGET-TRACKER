@@ -17,6 +17,9 @@
 #   token.json               cached Gmail/Sheets OAuth token
 #   ~/.config/budget-web.env session secret, Fernet key, webhook secrets
 #   web/dev.db               the web app's users, transactions and budgets
+#   ~/.cloudflared/*         named-tunnel credentials (cert.pem + <tunnel-id>.json).
+#                            Losing these means recreating the tunnel and
+#                            re-pointing DNS before the site is reachable again.
 #
 # The Fernet key matters twice over: without it, the encrypted email bodies in
 # dev.db are unreadable, so key and database have to be backed up together.
@@ -44,6 +47,7 @@ REPO="$PWD"
 DEST="${BACKUP_DEST:-$HOME/backups/budget-tracker}"
 KEEP="${BACKUP_KEEP:-14}"
 ENVF="${WEB_ENV_FILE:-$HOME/.config/budget-web.env}"
+CFDIR="${CLOUDFLARED_DIR:-$HOME/.cloudflared}"
 DRY_RUN=""
 [ "${1:-}" = "--dry-run" ] && DRY_RUN=1
 
@@ -66,10 +70,18 @@ fi
 stamp=$(date +%F-%H%M%S)
 archive="$DEST/budget-tracker-secrets-$stamp.tar.gz"
 
+# Cloudflare tunnel credentials, if this host runs the named tunnel.
+cf_files=()
+if [ -d "$CFDIR" ]; then
+  while IFS= read -r f; do cf_files+=("$(basename "$f")"); done \
+    < <(find "$CFDIR" -maxdepth 1 -type f \( -name 'cert.pem' -o -name '*.json' -o -name 'config.yml' \) | sort)
+fi
+
 if [ -n "$DRY_RUN" ]; then
   say "would archive to $archive:"
   for f in "${present[@]}"; do echo "    $f"; done
   [ -e "$ENVF" ] && echo "    $(basename "$ENVF")"
+  for f in "${cf_files[@]:-}"; do [ -n "$f" ] && echo "    cloudflared/$f"; done
   exit 0
 fi
 
@@ -81,8 +93,18 @@ staging=$(mktemp -d)
 trap 'rm -rf "$staging"' EXIT
 [ -e "$ENVF" ] && cp -p "$ENVF" "$staging/$(basename "$ENVF")"
 
+staged_cf=()
+if [ ${#cf_files[@]} -gt 0 ] && [ -n "${cf_files[0]:-}" ]; then
+  mkdir -p "$staging/cloudflared"
+  for f in "${cf_files[@]}"; do
+    cp -p "$CFDIR/$f" "$staging/cloudflared/$f"
+    staged_cf+=("cloudflared/$f")
+  done
+fi
+
 if ! tar -czf "$archive" -C "$REPO" "${present[@]}" \
-     ${ENVF:+-C "$staging" "$(basename "$ENVF")"} 2>/dev/null; then
+     ${ENVF:+-C "$staging" "$(basename "$ENVF")"} \
+     ${staged_cf:+-C "$staging" "${staged_cf[@]}"} 2>/dev/null; then
   say "ERROR: tar failed" >&2
   rm -f "$archive"
   exit 1
@@ -95,7 +117,8 @@ chmod 600 "$archive"
 # `pipefail` that reads as a failed pipeline even when the file was found.
 listing=$(tar -tzf "$archive") || { say "ERROR: cannot read back $archive" >&2; exit 1; }
 missing=0
-for f in "${present[@]}" "$(basename "$ENVF")"; do
+for f in "${present[@]}" "$(basename "$ENVF")" "${staged_cf[@]:-}"; do
+  [ -z "$f" ] && continue
   grep -qx "$f" <<<"$listing" || { say "ERROR: $f missing from archive" >&2; missing=1; }
 done
 if [ "$missing" != "0" ]; then

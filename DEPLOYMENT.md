@@ -92,35 +92,36 @@ The multi-user web app is a separate deployment (`docker-compose.yml` → Postgr
 Never expose `docker-compose.lan.yml` — it runs plain HTTP with
 `BUDGET_ENV=development`, so cookies aren't Secure and the secret guard is off.
 
-### The Cloudflare quick tunnel (current public access)
+### The Cloudflare named tunnel (public access, since 2026-07-25)
 
-The Lenovo instance is reachable from the internet through
-`cloudflared tunnel --url http://localhost:8000`, **not** through the Caddy stack
-— so the HSTS headers and Postmark IP allowlist in the `Caddyfile` do not apply
+The Lenovo is reachable from the internet at **https://cualtoapp.com** (and
+`www.`) through a **named** Cloudflare tunnel — **not** through the Caddy stack,
+so the HSTS header and Postmark IP allowlist in the `Caddyfile` do not apply
 here. Cloudflare terminates TLS, which is why `BUDGET_ENV=production` and its
 https-only rules are correct on this box.
 
-A quick tunnel gets a **new random hostname every time cloudflared starts**, and
-`BUDGET_BASE_URL` is baked into every verification and reset email. After a
-restart the app keeps mailing links to a hostname that no longer resolves —
-silently, with no error anywhere. `cloudflared` is also unsupervised (no systemd
-unit), so a reboot leaves no tunnel at all.
+- Tunnel `cualto`, id `8bebb7dc-67e2-452d-b65c-7ef515f96d07`.
+- Config `~/.cloudflared/config.yml` (0600) routes both hostnames to
+  `http://localhost:8000`, with a `http_status:404` catch-all so anything else
+  never reaches the app. Validate with `cloudflared tunnel ingress validate`.
+- Credentials `~/.cloudflared/<tunnel-id>.json` and `~/.cloudflared/cert.pem` —
+  **not** in the repo, and **not** yet in `backup-secrets.sh`; losing them means
+  recreating the tunnel and re-pointing DNS.
+- Started by cron: `@reboot sleep 15 && cloudflared tunnel run cualto`, logging to
+  `~/cloudflared-named.log`. Run it by hand the same way after killing it.
+- No open ports on the box or the router; the tunnel dials out.
 
-`scripts/sync-tunnel-url.sh` is the stopgap. Every 5 minutes (and 30s after
-reboot) it restarts cloudflared if it died, reads the live hostname from
-cloudflared's `/quicktunnel` metrics endpoint, rewrites `BUDGET_BASE_URL` if it
-drifted, and restarts uvicorn so the new value reaches its environment. It
-no-ops when the URL already matches, and a restart does **not** log anyone out
-(the session cookie is signed with `BUDGET_SESSION_SECRET`, which it never
-touches). Preview with `--dry-run`; output goes to `tunnel.log`.
+**Why this replaced the quick tunnel.** A quick tunnel gets a new random
+`*.trycloudflare.com` hostname on every start, and `BUDGET_BASE_URL` is baked into
+every verification and reset email — so a restart silently left the app mailing
+links to a host that no longer resolved. `scripts/sync-tunnel-url.sh` papered over
+that by rewriting the env file every five minutes; it was **deleted** with this
+change. If you ever reintroduce a quick tunnel, note that script would fight a
+named one: it starts a quick tunnel whenever it finds none and overwrites
+`BUDGET_BASE_URL` with the random hostname.
 
-Crontab entries are already installed and guarded on `[ -x … ]`, so they stay
-silent until this script is deployed.
-
-**This is a stopgap, not the answer.** A random hostname can't be trusted by
-users, bookmarked, or given to Postmark as a stable webhook target. Buy the
-domain and move to a named tunnel (or the VPS + Caddy stack) before anyone
-outside your own test accounts uses this — see TASKS.md.
+**Still to do:** HSTS is not set for this hostname (Cloudflare does not add it by
+default) — enable it in the dashboard under SSL/TLS → Edge Certificates.
 
 ### One-off migration for an existing database (2026-07-25)
 
