@@ -17,7 +17,7 @@
   {# ---- Step 1: forwarding address + confirmation ---- #}
   <section class="card step">
     <div class="step-head">
-      <span class="step-n {{ 'done' if confirmation }}" id="step-fwd">1</span>
+      <span class="step-n {{ 'done' if confirmations }}" id="step-fwd">1</span>
       <h2>{{ t('Autoriza el reenvío') }}</h2>
     </div>
     <ol class="steps">
@@ -28,19 +28,26 @@
         <strong>{{ t('aparecerá aquí abajo automáticamente') }}</strong>{{ t(', no tienes que buscarla.') }}</li>
     </ol>
 
-    <div id="code-box" class="code-box {{ 'shown' if confirmation }}">
-      <div id="confirm-content">
-        {% if confirmation and confirmation.kind == 'link' %}
-        <span class="muted">{{ t('Google envió un enlace de confirmación') }}</span>
-        <a class="cta-btn" href="{{ confirmation.value }}" target="_blank"
-           rel="noopener">{{ t('Confirmar reenvío en Gmail') }}</a>
-        {% elif confirmation and confirmation.kind == 'code' %}
-        <span class="muted">{{ t('Código de confirmación de Google') }}</span>
-        <strong class="num confirm-code">{{ confirmation.value }}</strong>
-        {% else %}
-        <span class="status-line"><span class="dot"></span>
-          {{ t('Esperando la confirmación de Google…') }}</span>
-        {% endif %}
+    <div id="code-box" class="code-box {{ 'shown' if confirmations }}">
+      <div id="confirm-list">
+        {% for conf in confirmations %}
+        <div class="confirm-item" data-source="{{ conf.source or '' }}">
+          {% if conf.kind == 'link' %}
+          <span class="muted">{{ t('Confirmar reenvío desde') }}
+            <strong>{{ conf.source or t('tu correo') }}</strong></span>
+          <a class="cta-btn" href="{{ conf.value }}" target="_blank"
+             rel="noopener">{{ t('Confirmar reenvío en Gmail') }}</a>
+          {% else %}
+          <span class="muted">{{ t('Código de confirmación de Google') }} —
+            <strong>{{ conf.source or t('tu correo') }}</strong></span>
+          <strong class="num confirm-code">{{ conf.value }}</strong>
+          {% endif %}
+        </div>
+        {% endfor %}
+        <div id="confirm-waiting"{% if confirmations %} style="display:none"{% endif %}>
+          <span class="status-line"><span class="dot"></span>
+            {{ t('Esperando la confirmación de Google…') }}</span>
+        </div>
       </div>
     </div>
   </section>
@@ -160,22 +167,54 @@
   }
 
   (function () {
-    var haveConfirm = {{ 'true' if confirmation else 'false' }};
     var haveTxn = {{ 'true' if tx_count else 'false' }};
-    if (haveConfirm && haveTxn) return;  // nothing left to watch
+    var LABEL_FROM = {{ t('Confirmar reenvío desde') | tojson }};
+    var YOUR_EMAIL = {{ t('tu correo') | tojson }};
+    var CONFIRM_BTN = {{ t('Confirmar reenvío en Gmail') | tojson }};
+    var CODE_LABEL = {{ t('Código de confirmación de Google') | tojson }};
 
-    function renderConfirmation(conf) {
-      var el = document.getElementById("confirm-content");
+    // Sources already on the page, so the poller only appends new accounts.
+    var shown = new Set(Array.prototype.map.call(
+      document.querySelectorAll("#confirm-list .confirm-item"),
+      function (el) { return el.dataset.source; }));
+
+    function makeItem(conf) {
+      var wrap = document.createElement("div");
+      wrap.className = "confirm-item";
+      wrap.dataset.source = conf.source || "";
+      var label = document.createElement("span");
+      label.className = "muted";
+      var strong = document.createElement("strong");
+      strong.textContent = conf.source || YOUR_EMAIL;
       if (conf.kind === "link") {
-        el.innerHTML =
-          '<span class="muted">' + {{ t('Google envió un enlace de confirmación') | tojson }} + '</span>' +
-          '<a class="cta-btn" href="' + conf.value + '" target="_blank" ' +
-          'rel="noopener">' + {{ t('Confirmar reenvío en Gmail') | tojson }} + '</a>';
+        label.appendChild(document.createTextNode(LABEL_FROM + " "));
+        label.appendChild(strong);
+        var a = document.createElement("a");
+        a.className = "cta-btn"; a.href = conf.value;
+        a.target = "_blank"; a.rel = "noopener";
+        a.textContent = CONFIRM_BTN;
+        wrap.appendChild(label); wrap.appendChild(a);
       } else {
-        el.innerHTML =
-          '<span class="muted">' + {{ t('Código de confirmación de Google') | tojson }} + '</span>' +
-          '<strong class="num confirm-code">' + conf.value + '</strong>';
+        label.appendChild(document.createTextNode(CODE_LABEL + " — "));
+        label.appendChild(strong);
+        var code = document.createElement("strong");
+        code.className = "num confirm-code";
+        code.textContent = conf.value;
+        wrap.appendChild(label); wrap.appendChild(code);
       }
+      return wrap;
+    }
+    function renderConfirmations(list) {
+      if (!list || !list.length) return;
+      var listEl = document.getElementById("confirm-list");
+      var waiting = document.getElementById("confirm-waiting");
+      list.forEach(function (conf) {
+        var key = conf.source || "";
+        if (shown.has(key)) return;
+        shown.add(key);
+        listEl.insertBefore(makeItem(conf), waiting);
+      });
+      if (waiting) waiting.style.display = "none";
       document.getElementById("code-box").classList.add("shown");
       var s = document.getElementById("step-fwd");
       if (s) s.classList.add("done");
@@ -191,14 +230,14 @@
       });
     }
 
+    if (haveTxn) return;  // transactions already flowing — setup is done
     async function poll() {
       try {
         var r = await fetch("/setup/status", {headers: {"Accept": "application/json"}});
         if (!r.ok) return;
         var s = await r.json();
-        if (!haveConfirm && s.confirmation) { haveConfirm = true; renderConfirmation(s.confirmation); }
-        if (!haveTxn && s.tx_count > 0) { haveTxn = true; showTxn(); }
-        if (haveConfirm && haveTxn) clearInterval(timer);
+        renderConfirmations(s.confirmations);  // keeps watching for more accounts
+        if (s.tx_count > 0) { haveTxn = true; showTxn(); clearInterval(timer); }
       } catch (e) { /* transient — keep polling */ }
     }
     var timer = setInterval(poll, 4000);

@@ -158,6 +158,8 @@ _EN = {
     "Etiqueta": "Label",
     "Agregar tarjeta": "Add card",
     "Confirmar reenvío en Gmail": "Confirm forwarding in Gmail",
+    "Confirmar reenvío desde": "Confirm forwarding from",
+    "tu correo": "your email",
     "Google envió un enlace de confirmación": "Google sent a confirmation link",
     "Código de confirmación de Google": "Google confirmation code",
     "Esperando la confirmación de Google…": "Waiting for Google's confirmation…",
