@@ -302,7 +302,11 @@
     border: 1px dashed var(--line); display: flex; flex-direction: column; gap: .2rem;
   }
   .code-box.shown { border-style: solid; border-color: var(--brand); }
-  #confirm-content { display: flex; flex-direction: column; gap: .45rem; align-items: flex-start; }
+  #confirm-list { display: flex; flex-direction: column; gap: .8rem; }
+  .confirm-item { display: flex; flex-direction: column; gap: .45rem; align-items: flex-start; }
+  /* Keep the button a self-sized block so its label wraps inside one rounded box
+     (as inline text it split its background across lines when it wrapped). */
+  .confirm-item .cta-btn { max-width: 100%; text-align: center; }
   .code-box .confirm-code {
     font-size: 1.8rem; font-weight: 700; letter-spacing: .12em;
     color: var(--brand);
