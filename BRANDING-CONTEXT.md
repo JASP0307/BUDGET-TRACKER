@@ -47,10 +47,32 @@ Telegram alerts when a category runs low or goes over.
 
 The product name is **Cualto** and the domain is **cualtoapp.com**.
 
-The in-product wordmark now reads **Cualto**, set in Instrument Sans 700.
+The in-product wordmark reads **`cualto`** — **lowercase**, set in Instrument
+Sans 700. Lowercase is the settled logotype treatment; keep it lowercase in the
+mark and in any lockup.
+
+In running prose the name is capitalised normally (`Cualto`), the way *adidas*
+is lowercase as a mark but "Adidas" in a sentence. Page titles, email subjects
+and support copy all use the capitalised form.
 
 The mark beside it is still the placeholder `RD$` chip described in §4 — that is
 the slot this brief's `logo-mark.svg` replaces.
+
+### If you were also given a separate naming/identity brief
+
+Another brief exists proposing an "olla llena" (filled cooking pot) motif with a
+coin/notification dot — plus a Deep Teal `#048C8C` and Mango `#FFB800` palette
+and a rounded geometric sans.
+
+**Where the two disagree, this file wins.** The decision has been made:
+
+- **The palette stays green.** Teal, mango and coral are rejected — the green in
+  §3 is already shipping across the live product.
+- **The typefaces stay** Instrument Sans and Spline Sans Mono. No rounded
+  geometric sans.
+- **The lowercase wordmark from that brief is adopted**, as stated above.
+- **The olla-llena motif is still on the table** as a direction for the mark —
+  but drawn in the green palette of §3, not the teal it was proposed in.
 
 ---
 
