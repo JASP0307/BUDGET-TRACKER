@@ -82,71 +82,70 @@ def test_delete_card_without_txns(client):
         assert s.get(Card, cid) is None
 
 
-def test_status_surfaces_confirmation_code(client):
+def test_status_surfaces_own_confirmation_code(client):
     uid = _signup_login(client, "s6@example.com")
     from web.app.db import get_sessionmaker
     from web.app.models import RawEmail
     with get_sessionmaker()() as s:
-        s.add(RawEmail(user_id=uid, provider_message_id="c1",
-                       processing_status="confirmation", note="123456789"))
+        s.add(RawEmail(
+            user_id=uid, provider_message_id="c1", note="123456789",
+            processing_status="confirmation",
+            subject="(Gmail Forwarding Confirmation - Receive Mail from s6@example.com)"))
         s.commit()
     body = client.get("/setup/status").json()
     assert body["confirmations"] == [
-        {"kind": "code", "value": "123456789", "source": None}]
+        {"kind": "code", "value": "123456789", "source": "s6@example.com"}]
     assert body["tx_count"] == 0
 
 
-def test_status_surfaces_confirmation_link_with_source(client):
+def test_status_surfaces_own_confirmation_link(client):
     uid = _signup_login(client, "s7@example.com")
     from web.app.db import get_sessionmaker
     from web.app.models import RawEmail
     link = "https://mail.google.com/mail/vf-%5Babc%5D-xyz"
     with get_sessionmaker()() as s:
+        # Case-insensitive match against the registered email.
         s.add(RawEmail(
             user_id=uid, provider_message_id="c2", note=link,
             processing_status="confirmation",
-            subject="(Gmail Forwarding Confirmation - Receive Mail from alice@gmail.com)"))
+            subject="(Gmail Forwarding Confirmation - Receive Mail from S7@Example.com)"))
         s.commit()
     body = client.get("/setup/status").json()
-    # The source account is pulled from Google's subject and labeled.
     assert body["confirmations"] == [
-        {"kind": "link", "value": link, "source": "alice@gmail.com"}]
+        {"kind": "link", "value": link, "source": "S7@Example.com"}]
 
 
-def test_status_lists_one_confirmation_per_source(client):
-    """Forwarding from two accounts shows both, newest-per-source — not just the
-    single most recent (which used to hide the others behind an unlabeled link)."""
+def test_status_hides_other_peoples_confirmations(client):
+    """Only the confirmation from the user's own registered Gmail is shown; a
+    forward someone else set up to this inbound address is never surfaced."""
     uid = _signup_login(client, "s8@example.com")
-    from datetime import datetime, timezone
     from web.app.db import get_sessionmaker
     from web.app.models import RawEmail
 
-    def conf(mid, source, note, minute):
+    def conf(mid, source, note):
         return RawEmail(
             user_id=uid, provider_message_id=mid, note=note,
             processing_status="confirmation",
-            subject=f"(Gmail Forwarding Confirmation - Receive Mail from {source})",
-            received_at=datetime(2026, 7, 25, 3, minute, tzinfo=timezone.utc))
+            subject=f"(Gmail Forwarding Confirmation - Receive Mail from {source})")
 
     with get_sessionmaker()() as s:
-        s.add(conf("a1", "alice@gmail.com", "https://mail.google.com/mail/vf-OLD", 10))
-        s.add(conf("b1", "bob@gmail.com", "https://mail.google.com/mail/vf-BOB", 20))
-        s.add(conf("a2", "alice@gmail.com", "https://mail.google.com/mail/vf-NEW", 30))
+        s.add(conf("own", "s8@example.com", "https://mail.google.com/mail/vf-OWN"))
+        s.add(conf("other", "stranger@gmail.com", "https://mail.google.com/mail/vf-OTHER"))
         s.commit()
 
     confs = client.get("/setup/status").json()["confirmations"]
-    # Newest first, one per source; alice keeps her newest link.
-    assert [c["source"] for c in confs] == ["alice@gmail.com", "bob@gmail.com"]
-    assert confs[0]["value"].endswith("vf-NEW")
+    assert [c["source"] for c in confs] == ["s8@example.com"]
+    assert confs[0]["value"].endswith("vf-OWN")
 
 
-def test_setup_page_labels_each_confirmation_source(client):
-    """The rendered /setup page shows one labeled confirm button per source."""
+def test_setup_page_shows_only_own_confirmation(client):
+    """The rendered /setup page labels the user's own confirmation and omits a
+    stranger's forward to the same inbound address."""
     uid = _signup_login(client, "s9@example.com")
     from web.app.db import get_sessionmaker
     from web.app.models import RawEmail
     with get_sessionmaker()() as s:
-        for mid, src in [("p1", "alice@gmail.com"), ("p2", "bob@gmail.com")]:
+        for mid, src in [("own", "s9@example.com"), ("other", "bob@gmail.com")]:
             s.add(RawEmail(
                 user_id=uid, provider_message_id=mid,
                 note=f"https://mail.google.com/mail/vf-{mid}",
@@ -154,9 +153,9 @@ def test_setup_page_labels_each_confirmation_source(client):
                 subject=f"(Gmail Forwarding Confirmation - Receive Mail from {src})"))
         s.commit()
     html = client.get("/setup").text
-    assert 'data-source="alice@gmail.com"' in html
-    assert 'data-source="bob@gmail.com"' in html
-    assert html.count("Confirmar reenvío en Gmail") == 2
+    assert 'data-source="s9@example.com"' in html
+    assert "bob@gmail.com" not in html
+    assert html.count("Confirmar reenvío en Gmail") == 1
     assert 'id="confirm-waiting" style="display:none"' in html  # hidden once present
 
 
