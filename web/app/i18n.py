@@ -342,6 +342,7 @@ _EN = {
         "You can cut off the forwarding from your own Gmail whenever you want.",
     "Esta página dice qué guardamos y quién más lo ve, incluido lo incómodo.":
         "This page says what we store and who else sees it, including the uncomfortable parts.",
+    "Ver el código": "View the code",
     "Reportar una vulnerabilidad": "Report a vulnerability",
     "Respondo en un máximo de 72 horas. No hay recompensa económica, pero sí crédito si lo quieres. Por favor no pruebes contra cuentas que no sean tuyas.":
         "I respond within 72 hours at most. There's no bug bounty, but there is credit if you want it. Please don't test against accounts that aren't yours.",

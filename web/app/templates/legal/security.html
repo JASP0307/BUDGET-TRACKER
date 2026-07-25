@@ -33,7 +33,8 @@
   <p>{{ t('Es un proyecto de una sola persona. No tengo certificación SOC 2 ni ISO, no tengo un equipo de seguridad y no voy a decirte que tenemos "seguridad de nivel bancario" porque sería mentira.') }}</p>
   <p>{{ t('Lo que sí puedo ofrecerte es verificable:') }}</p>
   <ul>
-    <li>{{ t('El código es abierto: puedes leer exactamente qué hacemos con tus correos.') }}</li>
+    <li>{{ t('El código es abierto: puedes leer exactamente qué hacemos con tus correos.') }}
+      <a href="{{ source_url }}" target="_blank" rel="noopener">{{ t('Ver el código') }}</a>.</li>
     <li>{{ t('Puedes descargar todos tus datos y borrar tu cuenta en cualquier momento, sin pedir permiso.') }}</li>
     <li>{{ t('Puedes cortar el reenvío desde tu propio Gmail cuando quieras.') }}</li>
     <li>{{ t('Esta página dice qué guardamos y quién más lo ve, incluido lo incómodo.') }}</li>

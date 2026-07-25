@@ -37,6 +37,15 @@ def test_privacy_discloses_operator_access(client):
     assert "desarrollador" in text
 
 
+def test_security_page_links_the_source(client):
+    """The page tells users they can read the code, so the link has to be there
+    and has to point at the real repository — otherwise the claim is rhetoric."""
+    from web.app.routers.legal import SOURCE_URL
+    text = client.get("/security").text
+    assert SOURCE_URL in text
+    assert SOURCE_URL.startswith("https://github.com/")
+
+
 def test_security_txt_is_served(client):
     r = client.get("/.well-known/security.txt")
     assert r.status_code == 200

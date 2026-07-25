@@ -21,6 +21,9 @@ router = APIRouter()
 # Bump when the substance of either page changes.
 LAST_UPDATED = "2026-07-25"
 SECURITY_CONTACT = "jabner0703@gmail.com"
+# The security page tells users they can read the code; link it so that claim is
+# checkable rather than rhetorical.
+SOURCE_URL = "https://github.com/JASP0307/BUDGET-TRACKER"
 
 
 def _context() -> dict:
@@ -28,6 +31,7 @@ def _context() -> dict:
     return {
         "last_updated": LAST_UPDATED,
         "contact": SECURITY_CONTACT,
+        "source_url": SOURCE_URL,
         "inbound_domain": settings.inbound_domain,
     }
 
