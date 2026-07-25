@@ -77,34 +77,35 @@ def _confirmation_source(subject: str) -> str | None:
     return m.group(0) if m else None
 
 
-def _pending_confirmations(session, user_id) -> list[dict]:
-    """Every Gmail forwarding-confirmation to surface on /setup, one per source
-    account (newest wins), each as ``{"kind": "link"|"code", "value", "source"}``.
+def _pending_confirmations(session, user_id, own_email: str) -> list[dict]:
+    """The forwarding-confirmation to surface on /setup — only the one whose
+    source Gmail matches this account's own registered email, newest first, as
+    ``{"kind": "link"|"code", "value", "source"}``.
 
-    A user who forwards from more than one Gmail gets one confirmation per
-    account; showing only the newest (as we used to) silently hid the others and
-    left the shown link unlabeled — so it was impossible to tell which account a
-    given "Confirm forwarding" button belonged to."""
+    Anyone who knows a user's inbound address could set up forwarding to it, so
+    the confirmations that land there aren't all the user's own. Restricting to
+    the registered email means a user only ever sees (and is asked to confirm)
+    the forward from their own Gmail — no one else's address leaks onto their
+    setup page, and the list stays a single expected entry in the multi-user
+    case. Returned as a list so the template/poller stay uniform; it holds 0 or
+    1 items."""
+    own = (own_email or "").strip().lower()
+    if not own:
+        return []
     rows = session.scalars(
         select(RawEmail).where(RawEmail.user_id == user_id,
                                RawEmail.processing_status == "confirmation")
         .order_by(RawEmail.received_at.desc())).all()
-    out: list[dict] = []
-    seen: set[str] = set()
     for raw in rows:
         source = _confirmation_source(raw.subject)
-        key = source or f"__{raw.id}"  # keep distinct unknown-source rows
-        if key in seen:
-            continue
+        if not source or source.lower() != own:
+            continue  # a forward someone else set up to this inbound address
         note = (raw.note or "")
         if note.startswith("http"):
-            out.append({"kind": "link", "value": note, "source": source})
-        elif _CODE_RE.match(note):
-            out.append({"kind": "code", "value": note, "source": source})
-        else:
-            continue
-        seen.add(key)
-    return out
+            return [{"kind": "link", "value": note, "source": source}]
+        if _CODE_RE.match(note):
+            return [{"kind": "code", "value": note, "source": source}]
+    return []
 
 
 @router.get("/setup")
@@ -120,7 +121,7 @@ def setup_page(request: Request, user: User = Depends(current_user)):
             "cards": cards,
             "inbound_addr": _inbound_address(session, user.id),
             "bank_from_query": BANK_FROM_QUERY,
-            "confirmations": _pending_confirmations(session, user.id),
+            "confirmations": _pending_confirmations(session, user.id, user.email),
             "tx_count": tx_count,
         })
 
@@ -146,7 +147,7 @@ def setup_status(user: User = Depends(current_user)) -> dict:
         tx_count = session.scalar(select(func.count()).select_from(Transaction)
                                   .where(Transaction.user_id == user.id)) or 0
         return {
-            "confirmations": _pending_confirmations(session, user.id),
+            "confirmations": _pending_confirmations(session, user.id, user.email),
             "tx_count": int(tx_count),
         }
 
