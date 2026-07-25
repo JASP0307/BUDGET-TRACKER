@@ -138,3 +138,31 @@ def test_bhd_incoming_transfer_is_ignored():
     txn = parse_email("b2", "Notificaciones@bhd.com.do", "Notificaciones",
                       _load("bhd_recibido.html"), usd_to_dop=RATE)
     assert txn is None
+
+
+def test_bhd_card_purchase_is_spend():
+    # "BHD Notificación de Transacciones": a card purchase in a 6-column table.
+    txn = parse_email("b3", BHD, "BHD Notificación de Transacciones",
+                      _load("bhd_compra.html"), usd_to_dop=RATE)
+    assert txn is not None
+    assert txn.bank is Bank.BHD
+    assert txn.tx_type is TxType.CONSUMO
+    assert txn.last4 == "5555"  # from "Mastercard Mujer Red # 5555"
+    assert txn.txn_date == date(2026, 7, 13)
+    assert txn.merchant == "BravoVa #1234567"  # the Comercio column
+    assert txn.currency == "RD$"
+    assert txn.amount_dop == pytest.approx(5177.00)
+    assert txn.signed_amount() == pytest.approx(5177.00)
+
+
+def test_bhd_card_purchase_reversal_is_negative():
+    # A "Reversada" row is a refund: positive amount, REVERSAL type, negative signed.
+    txn = parse_email("b4", BHD, "BHD Notificación de Transacciones",
+                      _load("bhd_compra_reversada.html"), usd_to_dop=RATE)
+    assert txn is not None
+    assert txn.tx_type is TxType.REVERSAL
+    assert txn.last4 == "5555"
+    assert txn.txn_date == date(2026, 7, 7)
+    assert txn.merchant == "Consumo BHD"  # reversal row has no Comercio
+    assert txn.amount_dop == pytest.approx(4857.00)
+    assert txn.signed_amount() == pytest.approx(-4857.00)  # refund self-corrects
