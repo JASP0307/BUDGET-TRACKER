@@ -1,14 +1,39 @@
 """Environment-driven settings. Defaults suit local development (SQLite,
-no encryption, no Telegram); production overrides via env / .env."""
+no encryption, no Telegram); production overrides via env / .env.
+
+Those dev defaults are convenient locally and dangerous in production: the
+session secret signs both session cookies and password-reset tokens, so booting
+on the published default would let anyone forge a session for any account. So
+they fail *closed* — with BUDGET_ENV=production, `require_production_secrets`
+refuses to start the app until every secret is real. See main._lifespan.
+"""
 
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
 
+PRODUCTION = "production"
+
+# The placeholder values below. Committed to this repo, therefore public;
+# reaching production with any of them is a boot-blocking error.
+DEV_DEFAULTS = {
+    "webhook_secret": "dev-secret",
+    "telegram_webhook_secret": "dev-tg-secret",
+    "session_secret": "dev-session-secret-change-me",
+}
+# Long enough that guessing is hopeless; `openssl rand -hex 32` gives 64.
+MIN_SECRET_LENGTH = 32
+
+
+class InsecureConfiguration(RuntimeError):
+    """Production configuration that would expose user data. Raised at startup,
+    before the app serves anything, so a bad deploy fails loudly."""
+
 
 @dataclass(frozen=True)
 class Settings:
+    env: str
     database_url: str
     webhook_secret: str
     inbound_domain: str
@@ -24,9 +49,16 @@ class Settings:
     bootstrap_password: str | None
     postmark_inbound_address: str | None
 
+    @property
+    def is_production(self) -> bool:
+        return self.env == PRODUCTION
+
 
 def get_settings() -> Settings:
     return Settings(
+        # "production" turns on the startup secret check (below), Secure session
+        # cookies, and the required-Fernet-key rule. Anything else is dev.
+        env=os.environ.get("BUDGET_ENV", "development").strip().lower(),
         database_url=os.environ.get("BUDGET_DATABASE_URL", "sqlite:///web/dev.db"),
         webhook_secret=os.environ.get("BUDGET_WEBHOOK_SECRET", "dev-secret"),
         inbound_domain=os.environ.get("BUDGET_INBOUND_DOMAIN", "in.example.do"),
@@ -52,3 +84,51 @@ def get_settings() -> Settings:
         # of a custom inbound domain. See services.inbound.format_inbound_address.
         postmark_inbound_address=os.environ.get("BUDGET_POSTMARK_INBOUND_ADDRESS"),
     )
+
+
+# (attribute, env var) for every secret that must be real in production.
+_REQUIRED_SECRETS = (
+    ("session_secret", "BUDGET_SESSION_SECRET"),
+    ("webhook_secret", "BUDGET_WEBHOOK_SECRET"),
+    ("telegram_webhook_secret", "BUDGET_TELEGRAM_WEBHOOK_SECRET"),
+)
+
+
+def require_production_secrets(settings: Settings | None = None) -> None:
+    """Raise `InsecureConfiguration` if a production deployment is misconfigured.
+
+    Checks every problem before raising, so one restart tells the operator
+    everything that is wrong instead of one item per attempt. A no-op outside
+    production.
+    """
+    settings = settings or get_settings()
+    if not settings.is_production:
+        return
+
+    problems: list[str] = []
+    for attr, env_var in _REQUIRED_SECRETS:
+        value = getattr(settings, attr) or ""
+        if not value:
+            problems.append(f"{env_var} is not set")
+        elif value == DEV_DEFAULTS.get(attr):
+            problems.append(f"{env_var} is still the development default")
+        elif len(value) < MIN_SECRET_LENGTH:
+            problems.append(
+                f"{env_var} is shorter than {MIN_SECRET_LENGTH} characters")
+
+    # Without a key, crypto.encrypt silently stores bank email bodies as
+    # plaintext (see crypto.py) — acceptable in dev, never with real users.
+    if not settings.fernet_key:
+        problems.append(
+            "BUDGET_FERNET_KEY is not set, so stored email bodies would be "
+            "plaintext")
+
+    # Session cookies are Secure-only in production; an http:// origin would
+    # mean verification and reset links that can't carry a login.
+    if not settings.base_url.startswith("https://"):
+        problems.append(f"BUDGET_BASE_URL must be https:// (got {settings.base_url!r})")
+
+    if problems:
+        raise InsecureConfiguration(
+            "Refusing to start with BUDGET_ENV=production:\n  - "
+            + "\n  - ".join(problems))

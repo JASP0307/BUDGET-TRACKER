@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}{{ t('Tu cuenta') }} — Budget Tracker{% endblock %}
+{% block content %}
+<div class="setup">
+  <h1>{{ t('Tu cuenta') }}</h1>
+  <p class="lede">{{ t('Tus datos son tuyos. Descárgalos o bórralos cuando quieras, sin pedirnos permiso.') }}</p>
+
+  {% if error %}<p class="alert err">{{ error }}</p>{% endif %}
+
+  <section class="card">
+    <h2 class="section-title">{{ t('Descargar mis datos') }}</h2>
+    <p class="muted">{{ t('Un archivo JSON con todas tus transacciones, categorías, reglas y presupuestos.') }}</p>
+    <a class="cta-btn" href="/account/export">{{ t('Descargar JSON') }}</a>
+  </section>
+
+  <section class="card">
+    <h2 class="section-title">{{ t('Qué guardamos') }}</h2>
+    <ul class="plain-list">
+      <li>{{ t('Los últimos 4 dígitos de tu tarjeta — nunca el número completo.') }}</li>
+      <li>{{ t('El comercio, el monto y la fecha de cada consumo.') }}</li>
+      <li>{{ t('Nunca tu clave del banco: no la pedimos y no podríamos usarla.') }}</li>
+      <li>{{ t('El correo original del banco se borra en cuanto lo leemos.') }}</li>
+    </ul>
+    <p class="muted"><a href="/privacy">{{ t('Leer la política de privacidad completa') }}</a></p>
+  </section>
+
+  <section class="card danger-card">
+    <h2 class="section-title">{{ t('Eliminar mi cuenta') }}</h2>
+    <p class="muted">{{ t('Borra tu cuenta y todos tus datos de inmediato. No se puede deshacer.') }}</p>
+    <p class="muted">{{ t('Después de borrar, quita el filtro de reenvío en Gmail para que dejemos de recibir correos.') }}</p>
+    <form method="post" action="/account/delete">
+      <div class="field">
+        <label for="del-pass">{{ t('Tu contraseña') }}</label>
+        <input id="del-pass" type="password" name="password"
+               autocomplete="current-password" required>
+      </div>
+      <div class="field">
+        <label for="del-confirm">{{ t('Escribe ELIMINAR para confirmar') }}</label>
+        <input id="del-confirm" type="text" name="confirm" autocomplete="off" required>
+      </div>
+      <button class="danger-btn" type="submit">{{ t('Eliminar mi cuenta y mis datos') }}</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

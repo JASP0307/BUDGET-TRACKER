@@ -32,6 +32,11 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(320), unique=True)
     hashed_password: Mapped[str | None] = mapped_column(String(200))  # Phase 2
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Bumped on every password change; session cookies carry the value they were
+    # minted with, so changing the password logs out every other device.
+    # See auth.deps.login_user / _load_session_user.
+    session_version: Mapped[int] = mapped_column(Integer, default=0,
+                                                 server_default="0")
     timezone: Mapped[str] = mapped_column(String(64), default="America/Santo_Domingo")
     locale: Mapped[str] = mapped_column(String(16), default="es-DO")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

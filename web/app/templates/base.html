@@ -230,6 +230,31 @@
   }
   @media (max-width: 560px) { .user-menu .who { display: none; } }
 
+  /* ---- account / legal ---- */
+  .plain-list { margin: .4rem 0 .8rem; padding-left: 1.1rem; color: var(--muted); }
+  .plain-list li { margin-bottom: .35rem; }
+  .danger-card { border-color: color-mix(in srgb, var(--bad) 35%, var(--line)); }
+  .danger-btn {
+    background: var(--bad); color: #fff; font-weight: 600;
+    border-color: transparent; padding: .55rem .9rem;
+  }
+  .prose { max-width: 40rem; margin: 0 auto; }
+  .prose h1 { font-size: 1.5rem; margin: .25rem 0 .3rem; }
+  .prose h2 { font-size: 1.05rem; margin: 1.8rem 0 .5rem; }
+  .prose p, .prose li { color: var(--muted); }
+  .prose .lede { margin: 0 0 1.5rem; }
+  .prose ul { padding-left: 1.1rem; }
+  .prose li { margin-bottom: .4rem; }
+  .prose strong { color: var(--ink); }
+  .prose .updated { font-size: .85rem; }
+  footer {
+    max-width: 640px; margin: 3rem auto 1.5rem; padding: 1rem 0 0;
+    border-top: 1px solid var(--line);
+    display: flex; gap: 1rem; flex-wrap: wrap;
+    font-size: .85rem; color: var(--muted);
+  }
+  footer a { color: var(--muted); }
+
   /* ---- setup wizard ---- */
   .setup { max-width: 640px; margin: 0 auto; }
   .setup > h1 { font-size: 1.5rem; margin: .25rem 0 .3rem; }
@@ -459,6 +484,7 @@
     <a href="/rules" {% if request.url.path == "/rules" %}aria-current="page"{% endif %}>{{ t('Reglas') }}</a>
     <a href="/categories" {% if request.url.path == "/categories" %}aria-current="page"{% endif %}>{{ t('Categorías') }}</a>
     <a href="/setup" {% if request.url.path == "/setup" %}aria-current="page"{% endif %}>{{ t('Conectar') }}</a>
+    <a href="/account" {% if request.url.path == "/account" %}aria-current="page"{% endif %}>{{ t('Cuenta') }}</a>
     {% if request.state.is_admin %}
     <a href="/admin" {% if request.url.path.startswith("/admin") %}aria-current="page"{% endif %}>Admin</a>
     {% endif %}
@@ -490,6 +516,11 @@
   </div>
 </header>
 <main>{% block content %}{% endblock %}</main>
+<footer>
+  <a href="/privacy">{{ t('Privacidad') }}</a>
+  <a href="/security">{{ t('Seguridad') }}</a>
+  {% if request.state.user %}<a href="/account">{{ t('Tus datos') }}</a>{% endif %}
+</footer>
 <script>
   function toggleTheme() {
     var next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";

@@ -72,6 +72,37 @@ def test_bad_email_and_short_password_rejected(client):
         "/register", data={"email": "ok@example.com", "password": "short"}).text
 
 
+def test_password_change_logs_out_other_sessions(client):
+    """The point of session_version: a user who suspects their account is
+    compromised can evict the intruder by changing the password."""
+    from web.app.auth.security import make_reset_token
+    from web.app.db import get_sessionmaker
+    from web.app.models import User
+
+    _register(client, "evict@example.com")
+    _verify(client, "evict@example.com")
+    client.post("/login", data={"email": "evict@example.com",
+                                "password": "supersecret"})
+    assert client.get("/").status_code == 200
+
+    # A second client stands in for the other device — same account, own cookies.
+    from fastapi.testclient import TestClient
+    from web.app.main import app
+    other = TestClient(app)
+    other.post("/login", data={"email": "evict@example.com",
+                               "password": "supersecret"})
+    assert other.get("/").status_code == 200
+
+    uid = _user_id("evict@example.com")
+    with get_sessionmaker()() as s:
+        token = make_reset_token(uid, s.get(User, uid).hashed_password)
+    client.post("/reset", data={"token": token, "password": "afterbreach1"})
+
+    # The other device's cookie is now stale and gets bounced to /login.
+    assert other.get("/", follow_redirects=False).status_code == 303
+    assert other.get("/", follow_redirects=False).headers["location"] == "/login"
+
+
 def test_accounts_are_isolated(client):
     """A logged-in user must not be able to delete another user's rule."""
     from web.app.db import get_sessionmaker

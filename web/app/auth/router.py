@@ -15,6 +15,7 @@ from ..templating import templates
 from ..db import get_sessionmaker
 from ..i18n import lang_from_locale
 from ..models import User
+from ..ratelimit import allow_email_send, allow_login, allow_reset_attempt
 from ..services.email import send_password_reset_email, send_verification_email
 from ..settings import get_settings
 from . import service
@@ -25,6 +26,10 @@ router = APIRouter()
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MIN_PASSWORD = 8
+
+# Shown when a rate limit trips. Deliberately identical for "too many logins"
+# and "too many reset emails" so probing the limits reveals nothing.
+_THROTTLED = ("Demasiados intentos. Espera unos minutos e inténtalo de nuevo.")
 
 
 def _valid_email(email: str) -> bool:
@@ -53,6 +58,10 @@ def register(request: Request, email: str = Form(...), password: str = Form(...)
         error = "Ingresa un correo válido."
     elif len(password) < MIN_PASSWORD:
         error = f"La contraseña debe tener al menos {MIN_PASSWORD} caracteres."
+    elif not allow_email_send(request, email):
+        # Checked after validation so malformed submissions don't consume the
+        # signup budget of a legitimate visitor on the same IP.
+        error = _THROTTLED
     if error:
         return templates.TemplateResponse(
             request, "auth/register.html", {"error": error, "email": email})
@@ -105,6 +114,9 @@ def login_form(request: Request, user=Depends(optional_user)):
 
 @router.post("/login")
 def login(request: Request, email: str = Form(...), password: str = Form(...)):
+    if not allow_login(request, email):
+        return templates.TemplateResponse(
+            request, "auth/login.html", {"error": _THROTTLED, "email": email})
     with get_sessionmaker()() as session:
         user = service.authenticate(session, email, password)
         if user is None:
@@ -112,7 +124,11 @@ def login(request: Request, email: str = Form(...), password: str = Form(...)):
                 request, "auth/login.html",
                 {"error": "Correo o contraseña incorrectos.", "email": email})
         if not user.is_verified:
-            _send_verification(user)
+            # Resending is also a mail send, so it draws on the mail budget —
+            # otherwise repeated logins to an unverified account are a flood
+            # vector that the login limit alone wouldn't cover.
+            if allow_email_send(request, email):
+                _send_verification(user)
             return templates.TemplateResponse(
                 request, "auth/login.html",
                 {"error": "Confirma tu correo antes de entrar. Te reenviamos "
@@ -149,10 +165,13 @@ def forgot_form(request: Request, user=Depends(optional_user)):
 
 @router.post("/forgot")
 def forgot(request: Request, email: str = Form(...)):
-    # Always show the same notice so the page never reveals which emails exist.
+    # Always show the same notice so the page never reveals which emails exist —
+    # including when throttled, which is why the limit check doesn't change the
+    # response.
+    throttled = not allow_email_send(request, email)
     with get_sessionmaker()() as session:
         user = service.user_by_email(session, email)
-        if user is not None and user.hashed_password:
+        if not throttled and user is not None and user.hashed_password:
             token = make_reset_token(user.id, user.hashed_password)
             url = f"{get_settings().base_url}/reset?token={token}"
             send_password_reset_email(user.email, url)
@@ -178,6 +197,9 @@ def reset_form(request: Request, token: str = ""):
 
 @router.post("/reset")
 def reset(request: Request, token: str = Form(...), password: str = Form(...)):
+    if not allow_reset_attempt(request):
+        return templates.TemplateResponse(
+            request, "auth/reset.html", {"token": token, "error": _THROTTLED})
     with get_sessionmaker()() as session:
         user = service.resolve_reset_token(session, token)
         if user is None:

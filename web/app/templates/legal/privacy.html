@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}{{ t('Privacidad') }} — Budget Tracker{% endblock %}
+{% block content %}
+<div class="prose">
+  <h1>{{ t('Privacidad') }}</h1>
+  <p class="lede">{{ t('En lenguaje claro: qué recibimos, qué guardamos, quién más lo ve y cómo borrarlo todo.') }}</p>
+
+  <h2>{{ t('Nunca te pedimos la clave de tu banco') }}</h2>
+  <p>{{ t('No usamos agregadores bancarios ni te pedimos tu usuario y contraseña del banco. No vemos tu balance, ni tus estados de cuenta, ni tu historial, y no podemos mover dinero. Lo único que recibimos son los correos de notificación que tú decides reenviarnos.') }}</p>
+
+  <h2>{{ t('Tú decides qué nos llega') }}</h2>
+  <p>{{ t('Durante la configuración creas un filtro en Gmail que reenvía únicamente los correos que vienen de tu banco, a una dirección personal tuya en nuestro servidor. Ningún otro correo de tu bandeja se nos envía nunca.') }}</p>
+  <p>{{ t('Ese filtro es tuyo y vive en tu Gmail. Si lo borras, dejamos de recibir correos en ese mismo instante — no tienes que pedírnoslo ni esperar a que hagamos nada.') }}</p>
+
+  <h2>{{ t('Qué guardamos') }}</h2>
+  <ul>
+    <li>{{ t('Tu correo electrónico y tu contraseña, guardada como hash Argon2id (no podemos leerla).') }}</li>
+    <li>{{ t('Los últimos 4 dígitos de cada tarjeta, más la etiqueta que tú le pongas. Nunca el número completo — los correos del banco no lo incluyen.') }}</li>
+    <li>{{ t('De cada consumo: comercio, monto, moneda, fecha y la categoría asignada.') }}</li>
+    <li>{{ t('Tus categorías, reglas y montos de presupuesto.') }}</li>
+  </ul>
+  <p><strong>{{ t('Lo que no guardamos:') }}</strong> {{ t('tu balance, tus claves, el número completo de tu tarjeta, ni tus otros correos.') }}</p>
+
+  <h2>{{ t('El correo original se borra') }}</h2>
+  <p>{{ t('Cuando llega un correo del banco lo leemos, extraemos el consumo y borramos el cuerpo del correo de inmediato. Lo único que queda es la transacción.') }}</p>
+  <p>{{ t('La excepción: si un correo tiene un formato que aún no sabemos leer, guardamos su contenido hasta 30 días para poder darle soporte a ese banco. Pasado ese plazo se borra automáticamente.') }}</p>
+
+  <h2>{{ t('Quién más ve tus datos') }}</h2>
+  <p>{{ t('Usamos estos proveedores, y ninguno más:') }}</p>
+  <ul>
+    <li><strong>Postmark</strong> ({{ t('parte de ActiveCampaign, Estados Unidos') }}) — {{ t('recibe los correos que reenvías y nos los entrega; también envía nuestros correos de confirmación y de contraseña. Al estar en EE. UU., le aplican leyes como el CLOUD Act. Configuramos su retención en el mínimo que ofrecen.') }}</li>
+    <li><strong>Telegram</strong> — {{ t('solo si activas las alertas. En ese caso el nombre del comercio y el monto se envían a los servidores de Telegram. Si no lo activas, Telegram no recibe nada.') }}</li>
+    <li>{{ t('Nuestro proveedor de servidor, donde corre la aplicación y la base de datos.') }}</li>
+  </ul>
+  <p>{{ t('No vendemos tus datos, no hacemos publicidad y no usamos rastreadores ni analítica de terceros.') }}</p>
+
+  <h2>{{ t('Qué puede ver el desarrollador') }}</h2>
+  <p>{{ t('Preferimos decirlo que esconderlo: cuando un correo llega con un formato que la aplicación no logra leer, aparece en un panel interno donde yo (el desarrollador) puedo abrir su contenido para agregar soporte a ese banco. Es el mismo correo de notificación que ya recibiste tú, y se borra a los 30 días.') }}</p>
+  <p>{{ t('Los correos que sí se procesan correctamente no pasan por ahí: su contenido ya se borró.') }}</p>
+
+  <h2>{{ t('Cifrado') }}</h2>
+  <p>{{ t('Todo el tráfico va por HTTPS. Los cuerpos de correo que se conservan (los que no pudimos leer) se guardan cifrados en la base de datos, lo que protege copias de seguridad y discos, pero no es cifrado de extremo a extremo: el servidor tiene la llave para poder leerlos. Ver') }} <a href="/security">{{ t('la página de seguridad') }}</a>.</p>
+
+  <h2>{{ t('Borrar todo') }}</h2>
+  <p>{{ t('Desde') }} <a href="/account">{{ t('Tu cuenta') }}</a> {{ t('puedes descargar todos tus datos en JSON y eliminar tu cuenta. El borrado es inmediato y definitivo: se eliminan tus transacciones, tarjetas, categorías, reglas, presupuestos y tu dirección de reenvío. No guardamos copias.') }}</p>
+
+  <h2>{{ t('Contacto') }}</h2>
+  <p>{{ t('Escríbeme a') }} <a href="mailto:{{ contact }}">{{ contact }}</a> {{ t('si tienes dudas o quieres reportar un problema de seguridad.') }}</p>
+
+  <p class="updated muted">{{ t('Última actualización') }}: {{ last_updated }}</p>
+</div>
+{% endblock %}

@@ -1,4 +1,30 @@
 # Replace app.example.do with the real domain before deploying.
 app.example.do {
-    reverse_proxy web:8000
+	# Postmark cannot sign its webhooks (it offers no HMAC), so the inbound
+	# endpoint is guarded by the shared secret the app checks *plus* this IP
+	# allowlist — the documented Postmark approach.
+	# Source: https://postmarkapp.com/support/article/800-ips-for-firewalls
+	# Postmark has changed these before; re-check after any inbound outage.
+	@not_postmark {
+		path /webhooks/postmark-inbound/*
+		not remote_ip 3.134.147.250 50.31.156.6 50.31.156.77 18.217.206.57
+	}
+	respond @not_postmark 403
+
+	header {
+		# The session cookie is Secure in production; HSTS is what stops the
+		# first request from going out in plaintext at all. Caddy does not add
+		# this by default.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		-Server
+	}
+
+	# A Content-Security-Policy belongs here too, but base.html currently loads
+	# Google Fonts from a CDN — self-host those first (see TASKS.md), otherwise
+	# any useful CSP either breaks the fonts or has to allow-list Google.
+
+	reverse_proxy web:8000
 }

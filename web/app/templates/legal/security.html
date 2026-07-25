@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{{ t('Seguridad') }} — Budget Tracker{% endblock %}
+{% block content %}
+<div class="prose">
+  <h1>{{ t('Seguridad') }}</h1>
+  <p class="lede">{{ t('Qué hacemos para proteger tus datos, y qué no hacemos. Sin exageraciones.') }}</p>
+
+  <h2>{{ t('Lo más importante: no hay nada que robar') }}</h2>
+  <p>{{ t('El riesgo de una app de finanzas suele ser que guarda las llaves de tu banco. Aquí no existen: no pedimos credenciales bancarias, no tenemos acceso a tu cuenta y nadie que entrara a nuestro servidor podría mover tu dinero. En el peor de los casos vería un historial de consumos.') }}</p>
+
+  <h2>{{ t('Cómo protegemos la cuenta') }}</h2>
+  <ul>
+    <li>{{ t('Contraseñas guardadas con Argon2id, el algoritmo recomendado hoy para esto. No podemos ver tu contraseña.') }}</li>
+    <li>{{ t('Sesiones en cookies firmadas, marcadas Secure y HttpOnly, con vencimiento a 14 días.') }}</li>
+    <li>{{ t('Al cambiar tu contraseña se cierran todas las sesiones abiertas en otros dispositivos y se anulan los enlaces de recuperación pendientes.') }}</li>
+    <li>{{ t('Los enlaces de confirmación y de recuperación están firmados y vencen (24 horas y 1 hora). Cada enlace de recuperación sirve una sola vez.') }}</li>
+    <li>{{ t('Límites de intentos en el inicio de sesión y en el envío de correos, para frenar ataques de fuerza bruta.') }}</li>
+    <li>{{ t('Todo el tráfico va por HTTPS, con HSTS activado.') }}</li>
+  </ul>
+
+  <h2>{{ t('Cómo protegemos los datos') }}</h2>
+  <ul>
+    <li>{{ t('Cada consulta está limitada a tu usuario: una cuenta no puede leer ni modificar los datos de otra.') }}</li>
+    <li>{{ t('Guardamos lo mínimo: últimos 4 dígitos, comercio, monto, fecha. Nunca el número completo de tarjeta ni tu balance.') }}</li>
+    <li>{{ t('El cuerpo del correo del banco se borra en cuanto se procesa; los que no pudimos leer se guardan cifrados y se eliminan a los 30 días.') }}</li>
+    <li>{{ t('Solo aceptamos correos que vengan de un dominio bancario conocido; el resto se descarta.') }}</li>
+  </ul>
+
+  <h2>{{ t('Los límites de ese cifrado') }}</h2>
+  <p>{{ t('Los cuerpos de correo que se conservan están cifrados en la base de datos, y la llave vive en la configuración del servidor. Eso protege copias de seguridad, volcados de base de datos y discos robados. No protege contra alguien que logre entrar al servidor mismo, porque ahí está la llave. Preferimos decirlo así en vez de llamarlo cifrado de extremo a extremo, que no lo es.') }}</p>
+
+  <h2>{{ t('Lo que este proyecto no es') }}</h2>
+  <p>{{ t('Es un proyecto de una sola persona. No tengo certificación SOC 2 ni ISO, no tengo un equipo de seguridad y no voy a decirte que tenemos "seguridad de nivel bancario" porque sería mentira.') }}</p>
+  <p>{{ t('Lo que sí puedo ofrecerte es verificable:') }}</p>
+  <ul>
+    <li>{{ t('El código es abierto: puedes leer exactamente qué hacemos con tus correos.') }}</li>
+    <li>{{ t('Puedes descargar todos tus datos y borrar tu cuenta en cualquier momento, sin pedir permiso.') }}</li>
+    <li>{{ t('Puedes cortar el reenvío desde tu propio Gmail cuando quieras.') }}</li>
+    <li>{{ t('Esta página dice qué guardamos y quién más lo ve, incluido lo incómodo.') }}</li>
+  </ul>
+
+  <h2>{{ t('Reportar una vulnerabilidad') }}</h2>
+  <p>{{ t('Escríbeme a') }} <a href="mailto:{{ contact }}">{{ contact }}</a>. {{ t('Respondo en un máximo de 72 horas. No hay recompensa económica, pero sí crédito si lo quieres. Por favor no pruebes contra cuentas que no sean tuyas.') }}</p>
+  <p class="muted"><a href="/.well-known/security.txt">security.txt</a> · <a href="/privacy">{{ t('Privacidad') }}</a></p>
+
+  <p class="updated muted">{{ t('Última actualización') }}: {{ last_updated }}</p>
+</div>
+{% endblock %}
