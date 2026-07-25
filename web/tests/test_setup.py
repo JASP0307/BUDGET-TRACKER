@@ -91,21 +91,73 @@ def test_status_surfaces_confirmation_code(client):
                        processing_status="confirmation", note="123456789"))
         s.commit()
     body = client.get("/setup/status").json()
-    assert body["confirmation"] == {"kind": "code", "value": "123456789"}
+    assert body["confirmations"] == [
+        {"kind": "code", "value": "123456789", "source": None}]
     assert body["tx_count"] == 0
 
 
-def test_status_surfaces_confirmation_link(client):
+def test_status_surfaces_confirmation_link_with_source(client):
     uid = _signup_login(client, "s7@example.com")
     from web.app.db import get_sessionmaker
     from web.app.models import RawEmail
     link = "https://mail.google.com/mail/vf-%5Babc%5D-xyz"
     with get_sessionmaker()() as s:
-        s.add(RawEmail(user_id=uid, provider_message_id="c2",
-                       processing_status="confirmation", note=link))
+        s.add(RawEmail(
+            user_id=uid, provider_message_id="c2", note=link,
+            processing_status="confirmation",
+            subject="(Gmail Forwarding Confirmation - Receive Mail from alice@gmail.com)"))
         s.commit()
     body = client.get("/setup/status").json()
-    assert body["confirmation"] == {"kind": "link", "value": link}
+    # The source account is pulled from Google's subject and labeled.
+    assert body["confirmations"] == [
+        {"kind": "link", "value": link, "source": "alice@gmail.com"}]
+
+
+def test_status_lists_one_confirmation_per_source(client):
+    """Forwarding from two accounts shows both, newest-per-source — not just the
+    single most recent (which used to hide the others behind an unlabeled link)."""
+    uid = _signup_login(client, "s8@example.com")
+    from datetime import datetime, timezone
+    from web.app.db import get_sessionmaker
+    from web.app.models import RawEmail
+
+    def conf(mid, source, note, minute):
+        return RawEmail(
+            user_id=uid, provider_message_id=mid, note=note,
+            processing_status="confirmation",
+            subject=f"(Gmail Forwarding Confirmation - Receive Mail from {source})",
+            received_at=datetime(2026, 7, 25, 3, minute, tzinfo=timezone.utc))
+
+    with get_sessionmaker()() as s:
+        s.add(conf("a1", "alice@gmail.com", "https://mail.google.com/mail/vf-OLD", 10))
+        s.add(conf("b1", "bob@gmail.com", "https://mail.google.com/mail/vf-BOB", 20))
+        s.add(conf("a2", "alice@gmail.com", "https://mail.google.com/mail/vf-NEW", 30))
+        s.commit()
+
+    confs = client.get("/setup/status").json()["confirmations"]
+    # Newest first, one per source; alice keeps her newest link.
+    assert [c["source"] for c in confs] == ["alice@gmail.com", "bob@gmail.com"]
+    assert confs[0]["value"].endswith("vf-NEW")
+
+
+def test_setup_page_labels_each_confirmation_source(client):
+    """The rendered /setup page shows one labeled confirm button per source."""
+    uid = _signup_login(client, "s9@example.com")
+    from web.app.db import get_sessionmaker
+    from web.app.models import RawEmail
+    with get_sessionmaker()() as s:
+        for mid, src in [("p1", "alice@gmail.com"), ("p2", "bob@gmail.com")]:
+            s.add(RawEmail(
+                user_id=uid, provider_message_id=mid,
+                note=f"https://mail.google.com/mail/vf-{mid}",
+                processing_status="confirmation",
+                subject=f"(Gmail Forwarding Confirmation - Receive Mail from {src})"))
+        s.commit()
+    html = client.get("/setup").text
+    assert 'data-source="alice@gmail.com"' in html
+    assert 'data-source="bob@gmail.com"' in html
+    assert html.count("Confirmar reenvío en Gmail") == 2
+    assert 'id="confirm-waiting" style="display:none"' in html  # hidden once present
 
 
 def test_home_redirects_new_user_to_setup(client):

@@ -68,20 +68,43 @@ def _inbound_address(session, user_id) -> str | None:
     return format_inbound_address(inbound.token)
 
 
-def _latest_confirmation(session, user_id) -> dict | None:
-    """The most recent Gmail forwarding-confirmation to surface on /setup, as
-    ``{"kind": "link"|"code", "value": ...}``. Modern Gmail sends a click-to-
-    confirm link; older messages carried a numeric code."""
-    raw = session.scalar(
+def _confirmation_source(subject: str) -> str | None:
+    """The source Gmail that requested the forward, taken from Google's subject
+    ("… Forwarding Confirmation - Receive Mail from <addr>"). Returns the address
+    or None. Grabbing the single email in the subject works regardless of the
+    subject's language."""
+    m = re.search(r"[\w.+-]+@[\w.-]+\.\w+", subject or "")
+    return m.group(0) if m else None
+
+
+def _pending_confirmations(session, user_id) -> list[dict]:
+    """Every Gmail forwarding-confirmation to surface on /setup, one per source
+    account (newest wins), each as ``{"kind": "link"|"code", "value", "source"}``.
+
+    A user who forwards from more than one Gmail gets one confirmation per
+    account; showing only the newest (as we used to) silently hid the others and
+    left the shown link unlabeled — so it was impossible to tell which account a
+    given "Confirm forwarding" button belonged to."""
+    rows = session.scalars(
         select(RawEmail).where(RawEmail.user_id == user_id,
                                RawEmail.processing_status == "confirmation")
-        .order_by(RawEmail.received_at.desc()).limit(1))
-    note = (raw.note if raw else "") or ""
-    if note.startswith("http"):
-        return {"kind": "link", "value": note}
-    if _CODE_RE.match(note):
-        return {"kind": "code", "value": note}
-    return None
+        .order_by(RawEmail.received_at.desc())).all()
+    out: list[dict] = []
+    seen: set[str] = set()
+    for raw in rows:
+        source = _confirmation_source(raw.subject)
+        key = source or f"__{raw.id}"  # keep distinct unknown-source rows
+        if key in seen:
+            continue
+        note = (raw.note or "")
+        if note.startswith("http"):
+            out.append({"kind": "link", "value": note, "source": source})
+        elif _CODE_RE.match(note):
+            out.append({"kind": "code", "value": note, "source": source})
+        else:
+            continue
+        seen.add(key)
+    return out
 
 
 @router.get("/setup")
@@ -97,7 +120,7 @@ def setup_page(request: Request, user: User = Depends(current_user)):
             "cards": cards,
             "inbound_addr": _inbound_address(session, user.id),
             "bank_from_query": BANK_FROM_QUERY,
-            "confirmation": _latest_confirmation(session, user.id),
+            "confirmations": _pending_confirmations(session, user.id),
             "tx_count": tx_count,
         })
 
@@ -123,7 +146,7 @@ def setup_status(user: User = Depends(current_user)) -> dict:
         tx_count = session.scalar(select(func.count()).select_from(Transaction)
                                   .where(Transaction.user_id == user.id)) or 0
         return {
-            "confirmation": _latest_confirmation(session, user.id),
+            "confirmations": _pending_confirmations(session, user.id),
             "tx_count": int(tx_count),
         }
 
