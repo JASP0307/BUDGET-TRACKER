@@ -28,7 +28,7 @@ header {
   color: var(--card); background: var(--brand);
   padding: .15rem .35rem; border-radius: 6px; letter-spacing: .03em;
 }
-nav { display: flex; gap: .25rem; overflow-x: auto; }
+nav { display: flex; gap: .25rem; overflow-x: auto; flex: 1 1 auto; min-width: 0; }
 nav a {
   text-decoration: none; color: var(--muted); font-weight: 500;
   padding: .5rem .6rem; border-radius: 8px; white-space: nowrap;
@@ -39,7 +39,7 @@ nav a[aria-current="page"] { color: var(--brand); font-weight: 600; }
   background: none; border: 1px solid var(--line);
   border-radius: 8px; color: var(--ink); cursor: pointer;
   display: flex; align-items: center; padding: .5rem;
-  margin-left: .35rem; flex: none;
+  flex: none;
 }
 .theme-toggle:hover { border-color: var(--muted); }
 .lang-toggle {
@@ -70,6 +70,11 @@ nav a[aria-current="page"] { color: var(--brand); font-weight: 600; }
 }
 .nav-toggle:hover { border-color: var(--muted); }
 .hdr-menu { display: contents; }
+/* Always in the header bar, never in the drawer. */
+.hdr-actions {
+  display: flex; align-items: center; gap: .35rem;
+  flex: none; margin-left: auto;
+}
 .nav-close { display: none; }
 .nav-scrim { display: none; }
 
@@ -92,7 +97,7 @@ nav a[aria-current="page"] { color: var(--brand); font-weight: 600; }
   }
   header.has-nav .hdr-menu .nav-close:hover { color: var(--ink); border-color: var(--muted); }
   header.has-nav .hdr-menu nav {
-    flex-direction: column; gap: .15rem; overflow: visible;
+    flex: none; flex-direction: column; gap: .15rem; overflow: visible;
   }
   header.has-nav .hdr-menu nav a { padding: .7rem .75rem; }
   header.has-nav .hdr-menu .user-menu {
@@ -105,7 +110,6 @@ nav a[aria-current="page"] { color: var(--brand); font-weight: 600; }
     display: block; max-width: 100%; white-space: normal;
     overflow: visible; overflow-wrap: anywhere;
   }
-  header.has-nav .hdr-menu .user-menu .lang-toggle { align-self: flex-start; }
   header.has-nav .hdr-menu .user-menu form.inline { display: block; }
   header.has-nav.nav-open ~ .nav-scrim {
     display: block; position: fixed; inset: 0; z-index: 40;
@@ -158,7 +162,14 @@ main {
 .cat .fill {
   position: absolute; inset: 0 auto 0 0; display: block;
   background: color-mix(in srgb, var(--c) 14%, transparent);
-  border-right: 2px solid var(--c);
+}
+/* The exact percentage is marked along the bottom edge. It used to be a
+   full-height border on the right of the fill, which crossed whatever text
+   happened to sit at that x — the amount at high percentages, the category
+   name at low ones. Same precision, nothing to collide with. */
+.cat .fill::after {
+  content: ""; position: absolute; inset: auto 0 0 0;
+  height: 3px; background: var(--c);
 }
 .cat > div { position: relative; }
 .cat-line { display: flex; justify-content: space-between; gap: .75rem; align-items: baseline; }
@@ -252,7 +263,7 @@ button.block { width: 100%; padding: .65rem; margin-top: .25rem; }
   background: color-mix(in srgb, var(--bad) 8%, transparent);
 }
 .user-menu {
-  margin-left: auto; display: flex; align-items: center; gap: .6rem;
+  display: flex; align-items: center; gap: .6rem;
 }
 .user-menu .who {
   font-size: .85rem; color: var(--muted); max-width: 12rem;

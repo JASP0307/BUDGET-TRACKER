@@ -60,7 +60,7 @@
     color: var(--card); background: var(--brand);
     padding: .15rem .35rem; border-radius: 6px; letter-spacing: .03em;
   }
-  nav { display: flex; gap: .25rem; overflow-x: auto; }
+  nav { display: flex; gap: .25rem; overflow-x: auto; flex: 1 1 auto; min-width: 0; }
   nav a {
     text-decoration: none; color: var(--muted); font-weight: 500;
     padding: .5rem .6rem; border-radius: 8px; white-space: nowrap;
@@ -71,7 +71,7 @@
     background: none; border: 1px solid var(--line);
     border-radius: 8px; color: var(--ink); cursor: pointer;
     display: flex; align-items: center; padding: .5rem;
-    margin-left: .35rem; flex: none;
+    flex: none;
   }
   .theme-toggle:hover { border-color: var(--muted); }
   .lang-toggle {
@@ -102,6 +102,11 @@
   }
   .nav-toggle:hover { border-color: var(--muted); }
   .hdr-menu { display: contents; }
+  /* Always in the header bar, never in the drawer. */
+  .hdr-actions {
+    display: flex; align-items: center; gap: .35rem;
+    flex: none; margin-left: auto;
+  }
   .nav-close { display: none; }
   .nav-scrim { display: none; }
 
@@ -124,7 +129,7 @@
     }
     header.has-nav .hdr-menu .nav-close:hover { color: var(--ink); border-color: var(--muted); }
     header.has-nav .hdr-menu nav {
-      flex-direction: column; gap: .15rem; overflow: visible;
+      flex: none; flex-direction: column; gap: .15rem; overflow: visible;
     }
     header.has-nav .hdr-menu nav a { padding: .7rem .75rem; }
     header.has-nav .hdr-menu .user-menu {
@@ -137,7 +142,6 @@
       display: block; max-width: 100%; white-space: normal;
       overflow: visible; overflow-wrap: anywhere;
     }
-    header.has-nav .hdr-menu .user-menu .lang-toggle { align-self: flex-start; }
     header.has-nav .hdr-menu .user-menu form.inline { display: block; }
     header.has-nav.nav-open ~ .nav-scrim {
       display: block; position: fixed; inset: 0; z-index: 40;
@@ -190,7 +194,14 @@
   .cat .fill {
     position: absolute; inset: 0 auto 0 0; display: block;
     background: color-mix(in srgb, var(--c) 14%, transparent);
-    border-right: 2px solid var(--c);
+  }
+  /* The exact percentage is marked along the bottom edge. It used to be a
+     full-height border on the right of the fill, which crossed whatever text
+     happened to sit at that x — the amount at high percentages, the category
+     name at low ones. Same precision, nothing to collide with. */
+  .cat .fill::after {
+    content: ""; position: absolute; inset: auto 0 0 0;
+    height: 3px; background: var(--c);
   }
   .cat > div { position: relative; }
   .cat-line { display: flex; justify-content: space-between; gap: .75rem; align-items: baseline; }
@@ -284,7 +295,7 @@
     background: color-mix(in srgb, var(--bad) 8%, transparent);
   }
   .user-menu {
-    margin-left: auto; display: flex; align-items: center; gap: .6rem;
+    display: flex; align-items: center; gap: .6rem;
   }
   .user-menu .who {
     font-size: .85rem; color: var(--muted); max-width: 12rem;
@@ -572,31 +583,34 @@
     {% endif %}
   </nav>
   {% endif %}
+  {% if request.state.user %}
   <div class="user-menu">
-    {% if request.state.user %}
     <a class="who" href="/notifications" title="{{ t('Notificaciones') }}">{{ request.state.user.email }}</a>
     <form class="inline" method="post" action="/logout">
       <button class="quiet" type="submit">{{ t('Salir') }}</button>
     </form>
-    {% endif %}
+  </div>
+  {% endif %}
+  </div>
+  {# language and theme stay in the bar at every width — never in the drawer #}
+  <div class="hdr-actions">
     <span class="lang-toggle" role="group" aria-label="{{ t('Cambiar idioma') }}">
       <a href="/lang/es?next={{ request.url.path }}" {% if lang == 'es' %}aria-current="true"{% endif %}>ES</a>
       <a href="/lang/en?next={{ request.url.path }}" {% if lang == 'en' %}aria-current="true"{% endif %}>EN</a>
     </span>
+    <button class="theme-toggle" type="button" onclick="toggleTheme()"
+            aria-label="{{ t('Cambiar entre tema claro y oscuro') }}">
+      <svg class="sun" width="18" height="18" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"/>
+        <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.2 2.2M16.9 16.9l2.2 2.2M19.1 4.9l-2.2 2.2M7.1 16.9l-2.2 2.2"/>
+      </svg>
+      <svg class="moon" width="18" height="18" viewBox="0 0 24 24"
+           fill="currentColor" aria-hidden="true">
+        <path d="M20.6 14.6A8.5 8.5 0 0 1 9.4 3.4a8.5 8.5 0 1 0 11.2 11.2z"/>
+      </svg>
+    </button>
   </div>
-  </div>
-  <button class="theme-toggle" type="button" onclick="toggleTheme()"
-          aria-label="{{ t('Cambiar entre tema claro y oscuro') }}">
-    <svg class="sun" width="18" height="18" viewBox="0 0 24 24" fill="none"
-         stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="4"/>
-      <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.2 2.2M16.9 16.9l2.2 2.2M19.1 4.9l-2.2 2.2M7.1 16.9l-2.2 2.2"/>
-    </svg>
-    <svg class="moon" width="18" height="18" viewBox="0 0 24 24"
-         fill="currentColor" aria-hidden="true">
-      <path d="M20.6 14.6A8.5 8.5 0 0 1 9.4 3.4a8.5 8.5 0 1 0 11.2 11.2z"/>
-    </svg>
-  </button>
 </header>
 {% if request.state.user %}<div class="nav-scrim" onclick="closeNav()" aria-hidden="true"></div>{% endif %}
 <main>{% block content %}{% endblock %}</main>

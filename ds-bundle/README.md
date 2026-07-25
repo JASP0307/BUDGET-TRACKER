@@ -61,8 +61,10 @@ columns. This is a money app; unaligned amounts are a real defect. Pair with
   `.cta-btn`, inside a `.cta` panel.
 - **Budget display** — `.hero` wraps `.eyebrow` + `.amount` + `.sub` (the big
   "what's left" number). `.cats` > `.cat` is a category row whose background
-  *is* the meter: an absolutely-positioned `.fill` with an inline `width: N%`,
-  plus `.cat-line`, `.cat-name`, `.cat-left`, `.cat-meta`. Add `.warn` or `.bad`
+  *is* the meter: an absolutely-positioned `.fill` with an inline `width: N%`
+  (a soft tint, plus a solid rule on its **bottom** edge for the exact
+  figure — never a vertical edge, which would cross the text), plus
+  `.cat-line`, `.cat-name`, `.cat-left`, `.cat-meta`. Add `.warn` or `.bad`
   to `.cat` to shift its `--c`. `.stat-row` > `.stat` > `.stat-n` + `.stat-l`
   for counters.
 - **Transactions** — `.txns` > `.txn` > `.txn-line` (`.txn-merchant` + amount),
