@@ -45,6 +45,20 @@ KNOWN_BANK_DOMAINS = bank_domains()
 GMAIL_CONFIRMATION_SENDER = "forwarding-noreply@google.com"
 _TOKEN_RE = re.compile(r"^u_([a-z0-9]{6,32})@", re.IGNORECASE)
 _HASH_RE = re.compile(r"^u_([a-z0-9]{6,32})$", re.IGNORECASE)  # Postmark MailboxHash
+# The token anywhere it can legitimately appear inside a routing address:
+#   u_<token>@in.example.do                     custom inbound domain
+#   <pmhash>+u_<token>@inbound.postmarkapp.com  Postmark default inbound
+#   user+caf_=<pmhash>+u_<token>=inbound.postmarkapp.com@gmail.com
+#                                               Gmail's forwarding Return-Path
+# Anchored on a delimiter at both ends so it can't match inside a longer word.
+_TOKEN_ANYWHERE_RE = re.compile(r"(?:^|[+=<\s])u_([a-z0-9]{6,32})(?=[@=+>\s]|$)",
+                                re.IGNORECASE)
+# Headers that name where a message was actually *delivered*. Deliberately a
+# short allowlist rather than a scan of every header: routing on header content
+# means anyone who learns a token could aim mail at that account, so the fewer
+# places we honour it, the better. See the DMARC follow-up in TASKS.md.
+_ROUTING_HEADERS = ("X-Forwarded-To", "Delivered-To", "Return-Path",
+                    "X-Original-To")
 _GMAIL_CODE_RE = re.compile(r"\b(\d{9})\b")  # legacy numeric confirmation code
 # Modern Gmail forwarding-confirmation "click to confirm" link (vf- = verify).
 _GMAIL_CONFIRM_LINK_RE = re.compile(
@@ -271,22 +285,40 @@ def _parse_eml(data: bytes) -> tuple[str, str, str]:
 
 
 def _route(session: Session, payload: dict):
-    """Resolve the inbound address from a payload, supporting both shapes:
-    a custom-domain To (`u_<token>@in.<domain>`) and Postmark's default inbound
-    where the token rides in the mailbox hash (`<pmhash>+u_<token>@...`)."""
+    """Resolve the inbound address from a payload.
+
+    Sources are tried most-trustworthy first:
+
+    1. ``OriginalRecipient`` — the envelope recipient Postmark actually delivered
+       to. The correct answer whenever it is present.
+    2. ``MailboxHash`` — Postmark's parse of the ``+`` part.
+    3. ``ToFull`` / ``To`` — the header. Only useful when the user mails the
+       inbound address directly (manual forward, our own replayed fixtures).
+    4. Delivery headers (``_ROUTING_HEADERS``).
+
+    Steps 1 and 4 exist because of a real failure: on **Gmail auto-forwarded**
+    bank mail the ``To`` header is the *bank addressing the user*, so the inbound
+    address appears nowhere in it, and every such message was filed as
+    ``unrecognized``. Gmail records the true destination in ``X-Forwarded-To``
+    and in the rewritten ``Return-Path``, which is what step 4 reads.
+    """
     tokens: list[str] = []
 
-    # Custom-domain path: u_<token>@in.<domain> in the To address.
-    candidates = [t.get("Email", "") for t in payload.get("ToFull", [])
-                  if isinstance(t, dict)]
-    if not candidates and payload.get("To"):
-        candidates = [payload["To"]]
-    for addr in candidates:
-        m = _TOKEN_RE.match(addr.strip())
-        if m:
-            tokens.append(m.group(1).lower())
+    def add(value: str | None, *, anywhere: bool = False) -> None:
+        value = (value or "").strip()
+        if not value:
+            return
+        if anywhere:
+            tokens.extend(m.lower() for m in _TOKEN_ANYWHERE_RE.findall(value))
+        else:
+            m = _TOKEN_RE.match(value)
+            if m:
+                tokens.append(m.group(1).lower())
 
-    # Postmark default-inbound path: the token is the mailbox hash.
+    # 1. Envelope recipient — what the message was really delivered to.
+    add(payload.get("OriginalRecipient"), anywhere=True)
+
+    # 2. Postmark default-inbound path: the token is the mailbox hash.
     hashes = [payload.get("MailboxHash", "")]
     hashes += [t.get("MailboxHash", "") for t in payload.get("ToFull", [])
                if isinstance(t, dict)]
@@ -294,6 +326,20 @@ def _route(session: Session, payload: dict):
         m = _HASH_RE.match((h or "").strip())
         if m:
             tokens.append(m.group(1).lower())
+
+    # 3. Custom-domain path: u_<token>@in.<domain> in the To address.
+    candidates = [t.get("Email", "") for t in payload.get("ToFull", [])
+                  if isinstance(t, dict)]
+    if not candidates and payload.get("To"):
+        candidates = [payload["To"]]
+    for addr in candidates:
+        add(addr)
+        add(addr, anywhere=True)  # <pmhash>+u_<token>@… addressed directly
+
+    # 4. Delivery headers, for forwarded mail whose To is the user's own address.
+    for header in payload.get("Headers", []) or []:
+        if isinstance(header, dict) and header.get("Name") in _ROUTING_HEADERS:
+            add(header.get("Value"), anywhere=True)
 
     for token in tokens:
         found = session.scalar(select(InboundAddress).where(
