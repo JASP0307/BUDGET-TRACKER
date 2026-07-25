@@ -12,6 +12,15 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Load persisted runtime config (secrets, BUDGET_BASE_URL, BUDGET_WEBHOOK_SECRET,
+# BUDGET_POSTMARK_INBOUND_ADDRESS, …) from one file shared with the git
+# post-merge hook and the @reboot cron entry, so config lives in a single place
+# instead of being duplicated inline. Optional: skipped if the file is absent.
+WEB_ENV_FILE="${WEB_ENV_FILE:-$HOME/.config/budget-web.env}"
+if [ -f "$WEB_ENV_FILE" ]; then
+  set -a; . "$WEB_ENV_FILE"; set +a
+fi
+
 VENV="${VENV:-.venv-web}"
 [ -x "$VENV/bin/uvicorn" ] || VENV=".venv"
 if [ ! -x "$VENV/bin/uvicorn" ]; then
