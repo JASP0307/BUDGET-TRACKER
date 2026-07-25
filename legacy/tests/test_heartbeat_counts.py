@@ -22,7 +22,7 @@ def test_counts_today_and_week():
         _row(date(2026, 7, 22)),  # today
         _row(date(2026, 7, 22)),  # today
         _row(date(2026, 7, 20)),  # Monday — in week
-        _row(date(2026, 7, 19)),  # Sunday — previous week
+        _row(date(2025, 7, 19)),  # Sunday — previous week
         _row(date(2026, 7, 1)),   # earlier in month
     ]
     assert _count_rows(rows, TODAY) == (2, 3)

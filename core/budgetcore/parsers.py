@@ -24,7 +24,7 @@ from .banks import SUPPORTED_BANKS
 from .models import Bank, Transaction, TxType
 
 _MONEY_RE = re.compile(r"(RD\$|US\$)\s*([\d.,]+)")
-# Popular: "terminada en 1111" — Qik: "que termina en 53*...*3333" (masked PAN).
+# Popular: "terminada en 1234" — Qik: "que termina en 53*...*1234" (masked PAN).
 _LAST4_RE = re.compile(r"termina(?:da)?\s+en\s+[\d*]*(\d{4})")
 _POPULAR_DATE_RE = re.compile(r"\b(\d{2}/\d{2}/\d{4})\b")
 
@@ -178,7 +178,7 @@ def _parse_qik_date(raw: str) -> date:
 
 # The card-purchase table's column headers, lowercased, in order.
 _BHD_PURCHASE_HEADER = ("fecha", "moneda", "monto", "comercio", "estado", "tipo")
-# Card shown as "Mastercard Mujer Red # 5555": 4 digits not followed by more,
+# Card shown as "Mastercard Mujer Red # 1234": 4 digits not followed by more,
 # so it never grabs the leading digits of a long "Comercio #1234567".
 _BHD_CARD_RE = re.compile(r"#\s*(\d{4})(?!\d)")
 
@@ -261,8 +261,9 @@ def _name_tokens(name: str) -> set[str]:
 
 def _same_person(a: str, b: str) -> bool:
     """True when two names denote the same person: the shorter token set (with at
-    least two tokens) is contained in the longer. Tolerates an extra surname
-    ('... PRUEBA') or reordering, without matching on a single shared given name."""
+    least two tokens) is contained in the longer. Tolerates a second surname the
+    other form omits, or reordering, without matching on a single shared given
+    name (Dominican names commonly carry two surnames, inconsistently)."""
     smaller, larger = sorted((_name_tokens(a), _name_tokens(b)), key=len)
     return len(smaller) >= 2 and smaller <= larger
 

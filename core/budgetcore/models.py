@@ -38,7 +38,7 @@ class Transaction:
     original_amount: float     # amount as printed on the email
     currency: str              # "RD$" or "US$"
     category: str | None = None  # filled in by categorize step
-    card: str | None = None    # display label, e.g. "Popular VISA ISI *1111"
+    card: str | None = None    # display label, e.g. "Popular VISA ISI *1234"
 
     @property
     def card_label(self) -> str:

@@ -16,8 +16,8 @@ Gmail (read-only) ──▶ parse ──▶ categorize ──▶ Google Sheet ro
         └────────────── cron on a home server / Pi ◀───────────────────────┘
 ```
 
-- **Cards tracked:** Popular VISA ISI \*1111 (credit), Popular Visa Débito
-  Clásica \*2222 (debit), Qik \*3333 (credit).
+- **Cards tracked:** one credit and one debit card from Banco Popular, plus a Qik
+  credit card. Each deployment names its own in `config.toml` (`[cards.labels]`).
 - **Handled email types:** Popular Consumo, Popular Retiro (→ *Retiro Efectivo*),
   Qik purchase, Qik reversal (logged as a negative amount). Declined charges are
   ignored.

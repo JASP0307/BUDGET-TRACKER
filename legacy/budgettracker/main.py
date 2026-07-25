@@ -78,7 +78,7 @@ def run(config_path: str = "config.toml", *, dry_run: bool = False,
         if backfill and (txn.txn_date.year != today.year
                          or txn.txn_date.month != today.month):
             continue
-        txn = categorize(resolve_card(txn), cfg.rules)
+        txn = categorize(resolve_card(txn, cfg.card_labels), cfg.rules)
 
         # Guard against duplicate bank notifications (same content, different id).
         sig = sheets.signature(txn.card, txn.txn_date, txn.merchant, txn.signed_amount())
@@ -130,7 +130,7 @@ def _dry_run(cfg, emails) -> int:
         if txn is None:
             print(f"  · skipped (not a transaction): {email.subject!r}")
             continue
-        txn = categorize(resolve_card(txn), cfg.rules)
+        txn = categorize(resolve_card(txn, cfg.card_labels), cfg.rules)
         parsed += 1
         print(f"  ✓ {txn.txn_date} | {txn.category:<22} | "
               f"RD${txn.signed_amount():>10,.2f} | {txn.merchant} ({txn.card})")

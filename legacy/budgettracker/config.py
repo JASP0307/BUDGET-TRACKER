@@ -20,6 +20,9 @@ class Config:
     telegram_chat_id: str
     rules: dict[str, str]
     budget: dict[str, float]
+    # "<bank>:<last4>" -> Sheet display label. Deployment-specific and personal,
+    # so it lives here rather than in the repo. See cards.resolve_card.
+    card_labels: dict[str, str]
 
 
 def load(path: str | Path = "config.toml") -> Config:
@@ -37,4 +40,6 @@ def load(path: str | Path = "config.toml") -> Config:
         telegram_chat_id=tg["chat_id"],
         rules=dict(data.get("categorize", {}).get("rules", {})),
         budget={k: float(v) for k, v in data.get("budget", {}).items()},
+        card_labels={str(k): str(v) for k, v in
+                     data.get("cards", {}).get("labels", {}).items()},
     )
