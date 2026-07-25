@@ -140,6 +140,14 @@ def test_bhd_incoming_transfer_is_ignored():
     assert txn is None
 
 
+def test_bhd_transfer_to_own_account_is_ignored():
+    # Beneficiary is the account holder (greeting name + an extra surname): moving
+    # money to your own account is internal movement, not spend.
+    txn = parse_email("b5", BHD, "Transacciones entre productos BHD y a otros Bancos",
+                      _load("bhd_transferencia_propia.html"), usd_to_dop=RATE)
+    assert txn is None
+
+
 def test_bhd_card_purchase_is_spend():
     # "BHD Notificación de Transacciones": a card purchase in a 6-column table.
     txn = parse_email("b3", BHD, "BHD Notificación de Transacciones",

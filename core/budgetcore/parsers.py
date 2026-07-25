@@ -15,6 +15,7 @@ as (bank, last4) — display labels belong to the caller's card registry.
 from __future__ import annotations
 
 import re
+import unicodedata
 from datetime import date, datetime
 
 from bs4 import BeautifulSoup
@@ -251,18 +252,48 @@ def _parse_bhd_purchase(
     )
 
 
+def _name_tokens(name: str) -> set[str]:
+    """Uppercase, accent-stripped name words (commas and single letters dropped),
+    for order-independent name comparison. 'GÓMEZ, MIGUEL A' -> {GOMEZ, MIGUEL}."""
+    ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+    return {t for t in re.sub(r"[^A-Za-z]+", " ", ascii_name).upper().split() if len(t) > 1}
+
+
+def _same_person(a: str, b: str) -> bool:
+    """True when two names denote the same person: the shorter token set (with at
+    least two tokens) is contained in the longer. Tolerates an extra surname
+    ('... PRUEBA') or reordering, without matching on a single shared given name."""
+    smaller, larger = sorted((_name_tokens(a), _name_tokens(b)), key=len)
+    return len(smaller) >= 2 and smaller <= larger
+
+
+def _bhd_account_holder(soup: BeautifulSoup) -> str | None:
+    """The account holder, read from the 'Estimado(a): <NAME>' greeting."""
+    for strong in soup.find_all("strong"):
+        parent = strong.find_parent()
+        if parent is not None and parent.get_text(" ", strip=True).startswith("Estimado"):
+            return strong.get_text(" ", strip=True)
+    return None
+
+
 def _parse_bhd_transfer(
     message_id: str, soup: BeautifulSoup, *, usd_to_dop: float
 ) -> Transaction | None:
     """Transfer/payment alert: id-tagged fields. The beneficiary stands in for
     the merchant, the amount is Monto, and the source account's last 4 digits
-    identify the "card". Incoming money (no ``idBeneficiario``) returns None."""
+    identify the "card". Incoming money (no ``idBeneficiario``) returns None, and
+    a transfer to one's *own* account (beneficiary == the account holder) is
+    internal movement, not spend, so it returns None too."""
     beneficiary = soup.find(id="idBeneficiario")
     if beneficiary is None:
         return None  # incoming transfer or a non-transaction BHD email
     merchant = beneficiary.get_text(" ", strip=True)
     if not merchant:
         return None
+
+    holder = _bhd_account_holder(soup)
+    if holder is not None and _same_person(holder, merchant):
+        return None  # moving money to your own account is not a purchase
 
     amount_cell = soup.find(id="idMonto")
     money = _money(amount_cell.get_text(" ", strip=True)) if amount_cell else None
