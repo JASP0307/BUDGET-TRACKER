@@ -23,16 +23,19 @@ services:
       db:
         condition: service_healthy
     environment:
+      # production turns on the startup secret check, Secure cookies and the
+      # required-Fernet-key rule (see web/app/settings.py).
+      BUDGET_ENV: ${BUDGET_ENV:-production}
       BUDGET_DATABASE_URL: postgresql+psycopg://budget:${POSTGRES_PASSWORD}@db:5432/budget
       BUDGET_WEBHOOK_SECRET: ${BUDGET_WEBHOOK_SECRET:?set in .env}
-      BUDGET_FERNET_KEY: ${BUDGET_FERNET_KEY:-}
+      BUDGET_FERNET_KEY: ${BUDGET_FERNET_KEY:?set in .env}
       BUDGET_INBOUND_DOMAIN: ${BUDGET_INBOUND_DOMAIN:-in.example.do}
       BUDGET_USER_EMAIL: ${BUDGET_USER_EMAIL:-jabner0703@gmail.com}
       BUDGET_TELEGRAM_TOKEN: ${BUDGET_TELEGRAM_TOKEN:-}
       BUDGET_TELEGRAM_BOT_USERNAME: ${BUDGET_TELEGRAM_BOT_USERNAME:-}
-      BUDGET_TELEGRAM_WEBHOOK_SECRET: ${BUDGET_TELEGRAM_WEBHOOK_SECRET:-dev-tg-secret}
+      BUDGET_TELEGRAM_WEBHOOK_SECRET: ${BUDGET_TELEGRAM_WEBHOOK_SECRET:?set in .env}
       BUDGET_SESSION_SECRET: ${BUDGET_SESSION_SECRET:?set in .env}
-      BUDGET_BASE_URL: ${BUDGET_BASE_URL:-http://localhost:8000}
+      BUDGET_BASE_URL: ${BUDGET_BASE_URL:?set in .env — must be https://}
       BUDGET_POSTMARK_TOKEN: ${BUDGET_POSTMARK_TOKEN:-}
       BUDGET_FROM_EMAIL: ${BUDGET_FROM_EMAIL:-no-reply@localhost}
       BUDGET_BOOTSTRAP_PASSWORD: ${BUDGET_BOOTSTRAP_PASSWORD:-}

@@ -1,5 +1,6 @@
-"""Request-scoped auth: the session cookie holds a user id; `current_user`
-turns it into a User and rejects anonymous or stale sessions.
+"""Request-scoped auth: the session cookie holds a user id and the password
+generation it was issued under; `current_user` turns that into a User and
+rejects anonymous, stale, or superseded sessions.
 
 `NotAuthenticated` is translated to a redirect to /login by an exception
 handler registered in main.py, so page handlers can simply depend on a user.
@@ -17,6 +18,7 @@ from ..models import User
 from ..settings import get_settings
 
 _SESSION_KEY = "user_id"
+_VERSION_KEY = "session_version"
 
 
 class NotAuthenticated(Exception):
@@ -32,10 +34,12 @@ def is_admin(user: User) -> bool:
 
 def login_user(request: Request, user: User) -> None:
     request.session[_SESSION_KEY] = str(user.id)
+    request.session[_VERSION_KEY] = user.session_version
 
 
 def logout_user(request: Request) -> None:
     request.session.pop(_SESSION_KEY, None)
+    request.session.pop(_VERSION_KEY, None)
 
 
 def _load_session_user(request: Request) -> User | None:
@@ -47,7 +51,15 @@ def _load_session_user(request: Request) -> User | None:
     except (ValueError, TypeError):
         return None
     with get_sessionmaker()() as session:
-        return session.scalar(select(User).where(User.id == user_id))
+        user = session.scalar(select(User).where(User.id == user_id))
+        if user is None:
+            return None
+        # A password change bumps session_version, so cookies minted before it
+        # stop working — that is how a user evicts someone else from their
+        # account. Sessions predating this field carry no version and are stale.
+        if request.session.get(_VERSION_KEY) != user.session_version:
+            return None
+        return user
 
 
 def current_user(request: Request) -> User:

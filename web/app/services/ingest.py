@@ -3,6 +3,14 @@ dedupe → persist → notify. Reuses budgetcore for everything domain-shaped.
 
 Every failure mode ends as a `processing_status` on the RawEmail row instead
 of an exception escaping the webhook — one bad email must never block others.
+
+**Retention:** the body of an email that parsed successfully is discarded as
+soon as its Transaction exists (`_drop_body`). The transaction is the product;
+keeping the bank's notification would mean holding the most sensitive data in
+the system for no operational reason. The cost is that history can't be
+reparsed, which is precisely why bodies are kept for the emails we *failed* to
+read — those are the ones a new bank template has to be built from. The
+remaining statuses are swept by scripts/purge_raw_emails.py.
 """
 
 from __future__ import annotations
@@ -44,6 +52,17 @@ _GMAIL_CONFIRM_LINK_RE = re.compile(
 
 DEFAULT_USD_DOP = 60.0
 
+# Statuses whose body is dropped the moment processing finishes: we got what we
+# needed. Everything else keeps its body for the purge script's timed window —
+# `failed`/`unrecognized` because a human has to read them to add bank support,
+# `confirmation` because it holds the Gmail link the user still needs.
+_DISCARD_BODY_STATUSES = ("processed", "skipped", "backfilled")
+
+
+def _drop_body(raw: RawEmail) -> None:
+    """Discard the archived email body, keeping the row for audit and dedupe."""
+    raw.html_body = ""
+
 
 def handle_inbound(session: Session, payload: dict) -> RawEmail:
     """Entry point for the Postmark webhook. Idempotent on MessageID."""
@@ -70,6 +89,11 @@ def handle_inbound(session: Session, payload: dict) -> RawEmail:
         log.exception("ingest failed for raw_email %s", raw.id)
         raw.processing_status = "failed"
         raw.note = "unexpected error — see logs"
+    # Data minimization: drop the body now if nothing further needs it. Runs
+    # after _process, which reads the body, and covers the attachment/backfill
+    # path too since that sets its status before returning.
+    if raw.processing_status in _DISCARD_BODY_STATUSES:
+        _drop_body(raw)
     session.commit()
     return raw
 

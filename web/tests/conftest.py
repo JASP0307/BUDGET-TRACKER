@@ -1,6 +1,16 @@
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _fresh_rate_limits():
+    """Rate-limit counters are process-global, so clear them around every test —
+    otherwise logins in one test spend another test's budget."""
+    from web.app.ratelimit import limiter
+    limiter.reset()
+    yield
+    limiter.reset()
+
+
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
     """TestClient over a throwaway SQLite DB, startup/bootstrap included."""

@@ -102,5 +102,9 @@ def resolve_reset_token(session: Session, token: str) -> User | None:
 
 
 def set_password(session: Session, user: User, new_password: str) -> None:
+    """Set a new password and invalidate everything issued under the old one:
+    outstanding reset links (their embedded fingerprint stops matching) and
+    every existing session cookie (session_version moves on)."""
     user.hashed_password = hash_password(new_password)
+    user.session_version = (user.session_version or 0) + 1
     session.commit()

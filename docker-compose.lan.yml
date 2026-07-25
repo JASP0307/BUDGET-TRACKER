@@ -24,6 +24,10 @@ services:
       db:
         condition: service_healthy
     environment:
+      # Deliberately NOT production: this stack is plain HTTP on the LAN, so
+      # Secure cookies and the https-only BUDGET_BASE_URL rule can't apply.
+      # Never expose this file's stack to the internet — use docker-compose.yml.
+      BUDGET_ENV: development
       BUDGET_DATABASE_URL: postgresql+psycopg://budget:${POSTGRES_PASSWORD}@db:5432/budget
       BUDGET_WEBHOOK_SECRET: ${BUDGET_WEBHOOK_SECRET:?set in .env}
       BUDGET_FERNET_KEY: ${BUDGET_FERNET_KEY:-}
