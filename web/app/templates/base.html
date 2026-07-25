@@ -85,7 +85,9 @@
   .lang-toggle a:hover { color: var(--ink); }
   .lang-toggle a[aria-current="true"] { background: var(--brand); color: var(--btn-ink); }
   :root[data-theme="light"] .moon, :root[data-theme="dark"] .sun { display: none; }
-  @media (max-width: 430px) { .brand-text { display: none; } nav a { padding: .5rem .45rem; } }
+  /* The wordmark stays visible at every width. It used to be hidden below
+     430px because the inline nav crowded it out; the drawer freed that space. */
+  .brand-text { white-space: nowrap; }
 
   /* ---- mobile drawer ----
      Seven Spanish nav labels plus the account email never fit a phone. Below

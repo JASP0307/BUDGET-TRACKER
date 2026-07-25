@@ -123,10 +123,15 @@ building them into the identity — a red logo would read as a warning state.
 
 ## 4. The hard constraint: it must survive at 20 px
 
-In the app header the logo sits as a small mark plus a text wordmark. **On
-screens narrower than 430 px the wordmark is hidden and only the mark
-remains** — and this is a mobile-first product, so that is the common case, not
-an edge case.
+In the app header the logo sits as a small mark plus the text wordmark, and
+**the wordmark now stays visible at every width**, down to 320 px. It used to be
+hidden on narrow screens; the nav moved into a drawer, which freed the space.
+So in the header the mark is always accompanied by the word `cualto`.
+
+The 20 px requirement still stands, for a different and more demanding reason:
+**the favicon and the installed-app icon are the mark alone.** A browser tab
+renders it at 16–32 px, and this is a mobile-first PWA people add to a home
+screen. Those placements have no wordmark to lean on.
 
 Consequences:
 
@@ -147,6 +152,10 @@ you can either match or deliberately replace:
 
 A mark that works *as a knockout inside a green chip* and *as a standalone
 coloured glyph* covers every placement in the product.
+
+Because the wordmark is always beside it in the header, the mark does **not**
+have to carry the name there — it can be purely symbolic. It does have to stand
+alone in the favicon and app icon.
 
 ---
 

@@ -74,7 +74,9 @@ nav a[aria-current="page"] { color: var(--brand); font-weight: 600; }
 .lang-toggle a:hover { color: var(--ink); }
 .lang-toggle a[aria-current="true"] { background: var(--brand); color: var(--btn-ink); }
 .t:not(.dark) .moon, .t.dark .sun { display: none; }
-@media (max-width: 430px) { .brand-text { display: none; } nav a { padding: .5rem .45rem; } }
+/* The wordmark stays visible at every width. It used to be hidden below
+   430px because the inline nav crowded it out; the drawer freed that space. */
+.brand-text { white-space: nowrap; }
 
 /* ---- mobile drawer ----
    Seven Spanish nav labels plus the account email never fit a phone. Below
@@ -566,7 +568,7 @@ a.who:hover { color: var(--ink); }
       </button>
     </div>
   </header>
-  <p class="note">The brand lockup is <code>.brand-mark</code> + <code>.brand-text</code> — this is the slot the new logo replaces. Below 430px <code>.brand-text</code> is hidden and only the mark survives, so the mark has to read on its own.</p>
+  <p class="note">The brand lockup is <code>.brand-mark</code> + <code>.brand-text</code> — this is the slot the new logo replaces. Both stay visible at every width, down to 320px; the mark still has to read alone in the favicon and installed-app icon.</p>
 </div>
 
 <div class="t dark">

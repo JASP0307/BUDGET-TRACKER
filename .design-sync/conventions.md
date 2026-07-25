@@ -95,9 +95,13 @@ rendered in both themes.
 ## Two constraints that break layouts
 
 1. **Spanish runs ~20% longer than English** and is the default. Buttons and nav
-   items must tolerate it — `nav` scrolls horizontally rather than wrapping.
-2. **Below 430px `.brand-text` is hidden** and only `.brand-mark` survives, so
-   any logo mark has to read on its own at roughly 20px.
+   items must tolerate it. On desktop `nav` scrolls horizontally rather than
+   wrapping; at phone widths it is the drawer described above, so long labels
+   are not a problem there.
+2. **The header must survive 320px.** The bar carries `.nav-toggle`, the full
+   `.brand` lockup (`.brand-mark` + `.brand-text`, both visible at every width)
+   and `.theme-toggle` — signed out, the `.lang-toggle` instead of the
+   hamburger. Nothing else belongs in it; everything else goes in the drawer.
 
 ## Example
 
