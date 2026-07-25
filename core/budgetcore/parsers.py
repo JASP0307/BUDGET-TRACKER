@@ -1,10 +1,12 @@
 """Parse card-notification emails into normalized Transactions.
 
-Formats are documented in the project's NOTES.md ("Email formats"). Four shapes:
+Formats are documented in the project's NOTES.md ("Email formats"). Shapes:
   - Banco Popular "Notificación de Consumo"  (card purchase, 5-col table)
   - Banco Popular "Notificación de Retiro"   (ATM withdrawal, 5-col table)
   - Qik "Usaste tu tarjeta..."               (purchase, label/value table)
   - Qik "Se reversó una transacción..."      (reversal, label/value table)
+  - BHD "Notificación de Transacciones"      (card purchase, 6-col table)
+  - BHD "Transacciones entre productos..."   (transfer, id-tagged fields)
 
 Parsers are pure: raw HTML in, Transaction out. They identify the card only
 as (bank, last4) — display labels belong to the caller's card registry.
@@ -13,6 +15,7 @@ as (bank, last4) — display labels belong to the caller's card registry.
 from __future__ import annotations
 
 import re
+import unicodedata
 from datetime import date, datetime
 
 from bs4 import BeautifulSoup
@@ -173,24 +176,124 @@ def _parse_qik_date(raw: str) -> date:
     return datetime.strptime(cleaned, "%m-%d-%Y %I:%M %p").date()
 
 
+# The card-purchase table's column headers, lowercased, in order.
+_BHD_PURCHASE_HEADER = ("fecha", "moneda", "monto", "comercio", "estado", "tipo")
+# Card shown as "Mastercard Mujer Red # 5555": 4 digits not followed by more,
+# so it never grabs the leading digits of a long "Comercio #1234567".
+_BHD_CARD_RE = re.compile(r"#\s*(\d{4})(?!\d)")
+
+
 def _parse_bhd(
     message_id: str, subject: str, html: str, *, usd_to_dop: float
 ) -> Transaction | None:
-    """BHD transfer/payment alerts (``Alertas@bhd.com.do``). We log the *outgoing*
-    ones as spend: the beneficiary stands in for the merchant, the amount is
-    Monto, and the source account's last 4 digits identify the "card".
+    """BHD alerts (``Alertas@bhd.com.do``) arrive in two shapes, both spend:
 
-    Incoming Pago al Instante (money received) has no ``idBeneficiario`` cell and
-    returns None — those are income, not spend. BHD's value cells carry stable
-    element ids, so we read fields by id rather than by column position."""
+    - **Card purchase** — "BHD Notificación de Transacciones", a
+      Fecha/Moneda/Monto/Comercio/Estado/Tipo table (``_parse_bhd_purchase``).
+    - **Account transfer/payment** — "Transacciones entre productos BHD...",
+      id-tagged fields (``_parse_bhd_transfer``).
+
+    Money received and non-transaction mail return None. Both shapes come from
+    the same sender, so we parse the HTML once and try the purchase table first
+    (structure-based, so it survives Gmail's forwarding rewrites)."""
     soup = BeautifulSoup(html, "html.parser")
+    return (_parse_bhd_purchase(message_id, soup, usd_to_dop=usd_to_dop)
+            or _parse_bhd_transfer(message_id, soup, usd_to_dop=usd_to_dop))
 
+
+def _parse_bhd_purchase(
+    message_id: str, soup: BeautifulSoup, *, usd_to_dop: float
+) -> Transaction | None:
+    """Card-purchase alert: one data row under a Fecha/Moneda/Monto/Comercio/
+    Estado/Tipo header. Only settled charges count — ``Aprobada`` is spend,
+    ``Reversada`` is a refund (negative via ``TxType.REVERSAL``); anything else
+    (e.g. a decline) returns None. The amount and currency sit in separate cells
+    ("RD" + "$5,177.00"), so we read them apart rather than via ``_money``."""
+    rows = [[td.get_text(" ", strip=True) for td in tr.find_all("td")]
+            for tr in soup.find_all("tr")]
+    rows = [r for r in rows if len(r) == 6]
+    header_i = next(
+        (i for i, r in enumerate(rows)
+         if tuple(c.lower() for c in r) == _BHD_PURCHASE_HEADER),
+        None)
+    if header_i is None:
+        return None  # not a purchase alert — let the transfer parser try
+    data = next((r for r in rows[header_i + 1:] if any(r)), None)
+    if data is None:
+        return None
+    fecha, moneda, monto, comercio, estado, _tipo = data
+
+    estado = estado.lower()
+    if estado == "aprobada":
+        tx_type = TxType.CONSUMO
+    elif estado == "reversada":
+        tx_type = TxType.REVERSAL
+    else:
+        return None  # declined / pending — not spend
+
+    amount_m = re.search(r"[\d.,]+", monto)
+    fecha_m = _POPULAR_DATE_RE.search(fecha)
+    if amount_m is None or fecha_m is None:
+        return None
+    value = float(amount_m.group(0).replace(",", ""))
+    currency = "US$" if moneda.upper().startswith("US") else "RD$"
+
+    card = _BHD_CARD_RE.search(soup.get_text(" ", strip=True))
+    return Transaction(
+        message_id=message_id,
+        bank=Bank.BHD,
+        last4=card.group(1) if card else "????",
+        tx_type=tx_type,
+        txn_date=datetime.strptime(fecha_m.group(1), "%d/%m/%Y").date(),
+        merchant=comercio or "Consumo BHD",  # reversals can have no merchant
+        amount_dop=_to_dop(currency, value, usd_to_dop),
+        original_amount=value,
+        currency=currency,
+    )
+
+
+def _name_tokens(name: str) -> set[str]:
+    """Uppercase, accent-stripped name words (commas and single letters dropped),
+    for order-independent name comparison. 'GÓMEZ, MIGUEL A' -> {GOMEZ, MIGUEL}."""
+    ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+    return {t for t in re.sub(r"[^A-Za-z]+", " ", ascii_name).upper().split() if len(t) > 1}
+
+
+def _same_person(a: str, b: str) -> bool:
+    """True when two names denote the same person: the shorter token set (with at
+    least two tokens) is contained in the longer. Tolerates an extra surname
+    ('... PRUEBA') or reordering, without matching on a single shared given name."""
+    smaller, larger = sorted((_name_tokens(a), _name_tokens(b)), key=len)
+    return len(smaller) >= 2 and smaller <= larger
+
+
+def _bhd_account_holder(soup: BeautifulSoup) -> str | None:
+    """The account holder, read from the 'Estimado(a): <NAME>' greeting."""
+    for strong in soup.find_all("strong"):
+        parent = strong.find_parent()
+        if parent is not None and parent.get_text(" ", strip=True).startswith("Estimado"):
+            return strong.get_text(" ", strip=True)
+    return None
+
+
+def _parse_bhd_transfer(
+    message_id: str, soup: BeautifulSoup, *, usd_to_dop: float
+) -> Transaction | None:
+    """Transfer/payment alert: id-tagged fields. The beneficiary stands in for
+    the merchant, the amount is Monto, and the source account's last 4 digits
+    identify the "card". Incoming money (no ``idBeneficiario``) returns None, and
+    a transfer to one's *own* account (beneficiary == the account holder) is
+    internal movement, not spend, so it returns None too."""
     beneficiary = soup.find(id="idBeneficiario")
     if beneficiary is None:
         return None  # incoming transfer or a non-transaction BHD email
     merchant = beneficiary.get_text(" ", strip=True)
     if not merchant:
         return None
+
+    holder = _bhd_account_holder(soup)
+    if holder is not None and _same_person(holder, merchant):
+        return None  # moving money to your own account is not a purchase
 
     amount_cell = soup.find(id="idMonto")
     money = _money(amount_cell.get_text(" ", strip=True)) if amount_cell else None
