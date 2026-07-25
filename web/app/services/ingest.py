@@ -72,6 +72,22 @@ DEFAULT_USD_DOP = 60.0
 # `confirmation` because it holds the Gmail link the user still needs.
 _DISCARD_BODY_STATUSES = ("processed", "skipped", "backfilled")
 
+# The one `skipped` reason that is a *judgement call by our parser* rather than a
+# fact about the sender: the mail came from a real bank and we decided it wasn't
+# a transaction. If that call is ever wrong, this body is the only evidence — so
+# it is kept for the purge window like `unrecognized`, instead of being dropped
+# with the spam and the duplicates. Learned the hard way: a real Qik purchase
+# notification was skipped this way and its body was gone before anyone could
+# check whether the classification was right (2026-07-25).
+NOT_LOGGABLE_NOTE = "bank mail but not a loggable transaction (declined/marketing)"
+
+
+def _keeps_body(status: str, note: str) -> bool:
+    """True when the archived body is still worth holding for debugging."""
+    if status not in _DISCARD_BODY_STATUSES:
+        return True
+    return status == "skipped" and note == NOT_LOGGABLE_NOTE
+
 
 def _drop_body(raw: RawEmail) -> None:
     """Discard the archived email body, keeping the row for audit and dedupe."""
@@ -106,7 +122,7 @@ def handle_inbound(session: Session, payload: dict) -> RawEmail:
     # Data minimization: drop the body now if nothing further needs it. Runs
     # after _process, which reads the body, and covers the attachment/backfill
     # path too since that sets its status before returning.
-    if raw.processing_status in _DISCARD_BODY_STATUSES:
+    if not _keeps_body(raw.processing_status, raw.note or ""):
         _drop_body(raw)
     session.commit()
     return raw
@@ -178,7 +194,7 @@ def _ingest_transaction(session: Session, raw: RawEmail, from_addr: str,
     txn = parse_email(message_id, sender, subject, html,
                       usd_to_dop=current_fx_rate(session))
     if txn is None:
-        return "skipped", "bank mail but not a loggable transaction (declined/marketing)"
+        return "skipped", NOT_LOGGABLE_NOTE
 
     # 5. Card registry: never drop a transaction over an unregistered card.
     card = _get_or_create_card(session, raw.user_id, txn.bank.value, txn.last4)

@@ -66,6 +66,30 @@ def test_skipped_email_body_is_discarded(client):
     assert _raw("r-skip").html_body == ""
 
 
+def test_bank_mail_judged_not_a_transaction_keeps_its_body(client):
+    """A skip that is *our parser's judgement* about real bank mail must keep the
+    evidence. A genuine Qik purchase notification was once skipped this way and
+    the body was gone before anyone could check whether the call was right."""
+    from web.app.services.ingest import NOT_LOGGABLE_NOTE
+    body = "<p>Transaccion declinada</p>"
+    resp = _post(client, _payload("r-notx", _token(), html=body))
+    assert resp.json() == {"status": "skipped"}
+
+    raw = _raw("r-notx")
+    assert raw.note == NOT_LOGGABLE_NOTE
+    assert raw.html_body == body, "the only evidence of a possible parser gap"
+
+
+def test_duplicate_skip_still_drops_its_body(client):
+    """A duplicate is not a judgement call — the transaction already exists."""
+    _post(client, _payload("r-dup1", _token()))
+    resp = _post(client, _payload("r-dup2", _token()))
+    assert resp.json() == {"status": "skipped"}
+    raw = _raw("r-dup2")
+    assert "duplicate" in raw.note
+    assert raw.html_body == ""
+
+
 def test_unparseable_email_keeps_its_body_for_debugging(client):
     """The one case we do retain: a bank email whose format we can't read yet."""
     resp = _post(client, _payload("r-unrec", "nosuchtoken", html="<p>hola</p>"))
