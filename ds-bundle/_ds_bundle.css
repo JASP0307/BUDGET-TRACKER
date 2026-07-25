@@ -39,6 +39,7 @@ nav a[aria-current="page"] { color: var(--brand); font-weight: 600; }
   background: none; border: 1px solid var(--line);
   border-radius: 8px; color: var(--ink); cursor: pointer;
   display: flex; align-items: center; padding: .5rem;
+  margin-left: .35rem; flex: none;
 }
 .theme-toggle:hover { border-color: var(--muted); }
 .lang-toggle {
@@ -53,6 +54,65 @@ nav a[aria-current="page"] { color: var(--brand); font-weight: 600; }
 .lang-toggle a[aria-current="true"] { background: var(--brand); color: var(--btn-ink); }
 :root[data-theme="light"] .moon, :root[data-theme="dark"] .sun { display: none; }
 @media (max-width: 430px) { .brand-text { display: none; } nav a { padding: .5rem .45rem; } }
+
+/* ---- mobile drawer ----
+   Seven Spanish nav labels plus the account email never fit a phone. Below
+   $drawer-bp the nav and user menu slide out from the left instead; above it
+   `display: contents` dissolves the wrapper so the bar lays out exactly as
+   it always did. Only rendered for signed-in users (`header.has-nav`) — the
+   signed-out bar is just brand + language + theme and already fits. */
+.nav-toggle {
+  display: none; flex: none; background: none; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 8px; color: var(--ink);
+  align-items: center; padding: .5rem; margin-right: .1rem;
+}
+.nav-toggle:hover { border-color: var(--muted); }
+.hdr-menu { display: contents; }
+.nav-close { display: none; }
+.nav-scrim { display: none; }
+
+@media (max-width: 900px) {
+  header.has-nav .nav-toggle { display: flex; }
+  header.has-nav .hdr-menu {
+    position: fixed; inset: 0 auto 0 0; z-index: 50;
+    width: min(80vw, 19rem);
+    display: flex; flex-direction: column;
+    background: var(--card); border-right: 1px solid var(--line);
+    padding: 1rem 1rem 1rem max(1rem, env(safe-area-inset-left));
+    overflow-y: auto; overscroll-behavior: contain;
+    transform: translateX(-100%); visibility: hidden;
+  }
+  header.has-nav.nav-open .hdr-menu { transform: none; visibility: visible; }
+  header.has-nav .hdr-menu .nav-close {
+    display: flex; align-self: flex-end; flex: none;
+    background: none; border: 1px solid var(--line); border-radius: 8px;
+    color: var(--muted); cursor: pointer; padding: .45rem; margin-bottom: .5rem;
+  }
+  header.has-nav .hdr-menu .nav-close:hover { color: var(--ink); border-color: var(--muted); }
+  header.has-nav .hdr-menu nav {
+    flex-direction: column; gap: .15rem; overflow: visible;
+  }
+  header.has-nav .hdr-menu nav a { padding: .7rem .75rem; }
+  header.has-nav .hdr-menu .user-menu {
+    margin: auto 0 0; padding-top: 1rem; border-top: 1px solid var(--line);
+    flex-direction: column; align-items: stretch; gap: .75rem;
+  }
+  /* the email is hidden in the bar at narrow widths; in the drawer there is
+     room for it, so let it wrap instead */
+  header.has-nav .hdr-menu .user-menu .who {
+    display: block; max-width: 100%; white-space: normal;
+    overflow: visible; overflow-wrap: anywhere;
+  }
+  header.has-nav .hdr-menu .user-menu .lang-toggle { align-self: flex-start; }
+  header.has-nav .hdr-menu .user-menu form.inline { display: block; }
+  header.has-nav.nav-open ~ .nav-scrim {
+    display: block; position: fixed; inset: 0; z-index: 40;
+    background: rgba(0, 0, 0, .45); border: 0;
+  }
+}
+@media (max-width: 900px) and (prefers-reduced-motion: no-preference) {
+  header.has-nav .hdr-menu { transition: transform .22s ease, visibility .22s; }
+}
 
 main {
   max-width: 940px; margin: 0 auto;

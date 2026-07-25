@@ -76,6 +76,14 @@ columns. This is a money app; unaligned amounts are a real defect. Pair with
 - **Chrome** — `header` > `.brand` (`.brand-mark` + `.brand-text`), `nav` with
   `aria-current="page"` on the active link, `.user-menu`, `.lang-toggle`,
   `.theme-toggle`.
+- **Responsive nav** — `nav` and `.user-menu` sit inside `.hdr-menu`, which is
+  `display: contents` on desktop (the wrapper dissolves; the bar lays out as a
+  flat row). **At or below 900px it becomes a slide-in drawer** with a
+  `.nav-scrim` behind it and a `.nav-close` button inside it, opened by
+  `.nav-toggle`. The open state is the class `nav-open` on `header`, and the
+  whole mechanism only applies when `header` also has `.has-nav` — which is
+  rendered only for signed-in users. Do not design a wide horizontal nav for
+  phone widths; it will not be what ships.
 
 ## Read these before styling
 
@@ -114,7 +122,6 @@ rendered in both themes.
   </ul>
 </div>
 ```
-
 
 ---
 

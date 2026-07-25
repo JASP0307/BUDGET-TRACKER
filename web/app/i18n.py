@@ -34,6 +34,8 @@ _EN = {
     "Salir": "Sign out",
     "Cambiar entre tema claro y oscuro": "Toggle light/dark theme",
     "Cambiar idioma": "Change language",
+    "Abrir menú": "Open menu",
+    "Cerrar menú": "Close menu",
 
     # auth — login
     "Iniciar sesión": "Sign in",

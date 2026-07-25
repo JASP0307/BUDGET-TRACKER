@@ -114,6 +114,37 @@ def inject_previews(tokens: str, bundle: str) -> list[str]:
     return touched
 
 
+CONVENTIONS = ROOT / ".design-sync" / "conventions.md"
+
+
+def build_readme() -> None:
+    """README = the conventions header + a generated component index.
+
+    The header is inlined into the design agent's system prompt, so it has to
+    track conventions.md rather than be a stale copy of it.
+    """
+    rows = []
+    for f in sorted((OUT / "components").rglob("*.html")):
+        title = f.read_text().split("<title>")[1].split("</title>")[0]
+        rows.append(f"| {f.parent.parent.name} | `{f.parent.name}` | {title} |")
+    (OUT / "README.md").write_text(
+        CONVENTIONS.read_text()
+        + "\n---\n\n# Component index\n\n"
+        "Every card renders light and dark side by side. The CSS inside each card is\n"
+        "generated from the app's own stylesheet, so what you see is what ships.\n\n"
+        "| Group | Component | Shows |\n|---|---|---|\n"
+        + "\n".join(rows)
+        + "\n\n## Files\n\n"
+        "- `styles.css` — entry point. Rendered designs receive only this file's\n"
+        "  transitive `@import` closure.\n"
+        "- `tokens/tokens.css` — the 12 design tokens, light and dark.\n"
+        "- `_ds_bundle.css` — the app's component CSS, extracted verbatim.\n\n"
+        "There is no `_ds_bundle.js`: this design system is plain CSS with Jinja\n"
+        "templates, so there are no compiled components to instantiate. Build with the\n"
+        "class vocabulary above.\n"
+    )
+
+
 def main() -> None:
     tokens, bundle = split_style_block(BASE.read_text())
     (OUT / "tokens").mkdir(parents=True, exist_ok=True)
@@ -122,6 +153,8 @@ def main() -> None:
     for p in (OUT / "tokens" / "tokens.css", OUT / "_ds_bundle.css"):
         print(f"{p.relative_to(ROOT)}  {len(p.read_text().splitlines())} lines")
     print("previews refreshed:", ", ".join(inject_previews(tokens, bundle)))
+    build_readme()
+    print("README.md rebuilt from conventions.md")
 
 
 if __name__ == "__main__":

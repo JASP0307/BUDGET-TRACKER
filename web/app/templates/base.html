@@ -71,6 +71,7 @@
     background: none; border: 1px solid var(--line);
     border-radius: 8px; color: var(--ink); cursor: pointer;
     display: flex; align-items: center; padding: .5rem;
+    margin-left: .35rem; flex: none;
   }
   .theme-toggle:hover { border-color: var(--muted); }
   .lang-toggle {
@@ -85,6 +86,65 @@
   .lang-toggle a[aria-current="true"] { background: var(--brand); color: var(--btn-ink); }
   :root[data-theme="light"] .moon, :root[data-theme="dark"] .sun { display: none; }
   @media (max-width: 430px) { .brand-text { display: none; } nav a { padding: .5rem .45rem; } }
+
+  /* ---- mobile drawer ----
+     Seven Spanish nav labels plus the account email never fit a phone. Below
+     $drawer-bp the nav and user menu slide out from the left instead; above it
+     `display: contents` dissolves the wrapper so the bar lays out exactly as
+     it always did. Only rendered for signed-in users (`header.has-nav`) — the
+     signed-out bar is just brand + language + theme and already fits. */
+  .nav-toggle {
+    display: none; flex: none; background: none; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 8px; color: var(--ink);
+    align-items: center; padding: .5rem; margin-right: .1rem;
+  }
+  .nav-toggle:hover { border-color: var(--muted); }
+  .hdr-menu { display: contents; }
+  .nav-close { display: none; }
+  .nav-scrim { display: none; }
+
+  @media (max-width: 900px) {
+    header.has-nav .nav-toggle { display: flex; }
+    header.has-nav .hdr-menu {
+      position: fixed; inset: 0 auto 0 0; z-index: 50;
+      width: min(80vw, 19rem);
+      display: flex; flex-direction: column;
+      background: var(--card); border-right: 1px solid var(--line);
+      padding: 1rem 1rem 1rem max(1rem, env(safe-area-inset-left));
+      overflow-y: auto; overscroll-behavior: contain;
+      transform: translateX(-100%); visibility: hidden;
+    }
+    header.has-nav.nav-open .hdr-menu { transform: none; visibility: visible; }
+    header.has-nav .hdr-menu .nav-close {
+      display: flex; align-self: flex-end; flex: none;
+      background: none; border: 1px solid var(--line); border-radius: 8px;
+      color: var(--muted); cursor: pointer; padding: .45rem; margin-bottom: .5rem;
+    }
+    header.has-nav .hdr-menu .nav-close:hover { color: var(--ink); border-color: var(--muted); }
+    header.has-nav .hdr-menu nav {
+      flex-direction: column; gap: .15rem; overflow: visible;
+    }
+    header.has-nav .hdr-menu nav a { padding: .7rem .75rem; }
+    header.has-nav .hdr-menu .user-menu {
+      margin: auto 0 0; padding-top: 1rem; border-top: 1px solid var(--line);
+      flex-direction: column; align-items: stretch; gap: .75rem;
+    }
+    /* the email is hidden in the bar at narrow widths; in the drawer there is
+       room for it, so let it wrap instead */
+    header.has-nav .hdr-menu .user-menu .who {
+      display: block; max-width: 100%; white-space: normal;
+      overflow: visible; overflow-wrap: anywhere;
+    }
+    header.has-nav .hdr-menu .user-menu .lang-toggle { align-self: flex-start; }
+    header.has-nav .hdr-menu .user-menu form.inline { display: block; }
+    header.has-nav.nav-open ~ .nav-scrim {
+      display: block; position: fixed; inset: 0; z-index: 40;
+      background: rgba(0, 0, 0, .45); border: 0;
+    }
+  }
+  @media (max-width: 900px) and (prefers-reduced-motion: no-preference) {
+    header.has-nav .hdr-menu { transition: transform .22s ease, visibility .22s; }
+  }
 
   main {
     max-width: 940px; margin: 0 auto;
@@ -475,9 +535,29 @@
 </style>
 </head>
 <body>
-<header>
-  <a class="brand" href="/"><span class="brand-mark">RD$</span><span class="brand-text">cualto</span></a>
+<header{% if request.state.user %} class="has-nav"{% endif %}>
   {% if request.state.user %}
+  <button class="nav-toggle" type="button" onclick="toggleNav()"
+          aria-expanded="false" aria-controls="hdr-menu"
+          aria-label="{{ t('Abrir menú') }}"
+          data-open="{{ t('Abrir menú') }}" data-close="{{ t('Cerrar menú') }}">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <path d="M3 6h18M3 12h18M3 18h18"/>
+    </svg>
+  </button>
+  {% endif %}
+  <a class="brand" href="/"><span class="brand-mark">RD$</span><span class="brand-text">cualto</span></a>
+  <div class="hdr-menu" id="hdr-menu">
+  {% if request.state.user %}
+  {# the open panel covers the hamburger, so it carries its own close control #}
+  <button class="nav-close" type="button" onclick="closeNav()"
+          aria-label="{{ t('Cerrar menú') }}">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <path d="M6 6l12 12M18 6L6 18"/>
+    </svg>
+  </button>
   <nav>
     <a href="/" {% if request.url.path == "/" %}aria-current="page"{% endif %}>{{ t('Inicio') }}</a>
     <a href="/budgets" {% if request.url.path == "/budgets" %}aria-current="page"{% endif %}>{{ t('Presupuesto') }}</a>
@@ -501,20 +581,22 @@
       <a href="/lang/es?next={{ request.url.path }}" {% if lang == 'es' %}aria-current="true"{% endif %}>ES</a>
       <a href="/lang/en?next={{ request.url.path }}" {% if lang == 'en' %}aria-current="true"{% endif %}>EN</a>
     </span>
-    <button class="theme-toggle" type="button" onclick="toggleTheme()"
-            aria-label="{{ t('Cambiar entre tema claro y oscuro') }}">
-      <svg class="sun" width="18" height="18" viewBox="0 0 24 24" fill="none"
-           stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="4"/>
-        <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.2 2.2M16.9 16.9l2.2 2.2M19.1 4.9l-2.2 2.2M7.1 16.9l-2.2 2.2"/>
-      </svg>
-      <svg class="moon" width="18" height="18" viewBox="0 0 24 24"
-           fill="currentColor" aria-hidden="true">
-        <path d="M20.6 14.6A8.5 8.5 0 0 1 9.4 3.4a8.5 8.5 0 1 0 11.2 11.2z"/>
-      </svg>
-    </button>
   </div>
+  </div>
+  <button class="theme-toggle" type="button" onclick="toggleTheme()"
+          aria-label="{{ t('Cambiar entre tema claro y oscuro') }}">
+    <svg class="sun" width="18" height="18" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="4"/>
+      <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.2 2.2M16.9 16.9l2.2 2.2M19.1 4.9l-2.2 2.2M7.1 16.9l-2.2 2.2"/>
+    </svg>
+    <svg class="moon" width="18" height="18" viewBox="0 0 24 24"
+         fill="currentColor" aria-hidden="true">
+      <path d="M20.6 14.6A8.5 8.5 0 0 1 9.4 3.4a8.5 8.5 0 1 0 11.2 11.2z"/>
+    </svg>
+  </button>
 </header>
+{% if request.state.user %}<div class="nav-scrim" onclick="closeNav()" aria-hidden="true"></div>{% endif %}
 <main>{% block content %}{% endblock %}</main>
 <footer>
   <a href="/privacy">{{ t('Privacidad') }}</a>
@@ -533,6 +615,39 @@
       document.documentElement.dataset.theme === "dark" ? "#101613" : "#F2F4F1";
   }
   syncThemeColor();
+
+  // Mobile drawer. The header is the state holder so CSS can drive both the
+  // panel and the scrim off one class.
+  function toggleNav(force) {
+    var head = document.querySelector("header.has-nav");
+    if (!head) return;
+    var btn = head.querySelector(".nav-toggle");
+    var open = force === undefined ? !head.classList.contains("nav-open") : force;
+    head.classList.toggle("nav-open", open);
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    btn.setAttribute("aria-label", open ? btn.dataset.close : btn.dataset.open);
+    // Stop the page scrolling behind the panel.
+    document.body.style.overflow = open ? "hidden" : "";
+    if (open) {
+      var first = head.querySelector("#hdr-menu .nav-close");
+      if (first) first.focus();
+    } else {
+      btn.focus();
+    }
+  }
+  function closeNav() { toggleNav(false); }
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    var head = document.querySelector("header.has-nav.nav-open");
+    if (head) closeNav();
+  });
+
+  // Resizing past the breakpoint while open would otherwise leave the body
+  // scroll-locked with no visible panel.
+  matchMedia("(min-width: 901px)").addEventListener("change", function (e) {
+    if (e.matches && document.querySelector("header.has-nav.nav-open")) closeNav();
+  });
 </script>
 </body>
 </html>
