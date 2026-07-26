@@ -66,6 +66,19 @@ class _FakeResponse:
         return {"message": {"content": json.dumps({"category": self._category})}}
 
 
+class _RawResponse:
+    """A backend that ignores `format` and answers with whatever it likes."""
+
+    def __init__(self, content):
+        self._content = content
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return {"message": {"content": self._content}}
+
+
 # ---- suggest_category (Ollama client) ----
 
 def test_suggest_category_returns_valid_name(monkeypatch):
@@ -103,6 +116,21 @@ def test_suggest_category_null_and_garbage_and_errors(monkeypatch):
         raise requests.ConnectionError("ollama down")
     monkeypatch.setattr(suggest.requests, "post", boom)
     assert suggest.suggest_category("X", ["A"], url="u", model="m") is None
+
+
+def test_suggest_category_survives_a_backend_that_ignores_the_schema(monkeypatch):
+    """Ollama's cloud-hosted models answer in prose despite `format`, and a
+    model may emit a bare `null`. Both used to escape as an AttributeError from
+    .get() and abort the whole sweep — they must read as "no answer"."""
+    from web.app.services import suggest
+
+    for content in ("Category: **Food Delivery Services**",  # prose
+                    "null",                                   # valid JSON, not an object
+                    "[]",                                     # valid JSON, not an object
+                    ""):                                      # empty body
+        monkeypatch.setattr(suggest.requests, "post",
+                            lambda *a, _c=content, **k: _RawResponse(_c))
+        assert suggest.suggest_category("X", ["A"], url="u", model="m") is None
 
 
 # ---- sweep ----

@@ -97,10 +97,16 @@ def suggest_category(merchant: str, categories: list[str], *,
         )
         resp.raise_for_status()
         answer = json.loads(resp.json()["message"]["content"])
-        name = answer.get("category")
     except (requests.RequestException, KeyError, ValueError, TypeError):
         log.warning("ollama call failed for merchant %r", merchant, exc_info=True)
         return None
+    # Not every backend honours `format`: Ollama's cloud-hosted models answer in
+    # prose, and a model can also emit a bare `null`, which parses to None. Both
+    # once escaped as an AttributeError from .get() and killed the whole sweep,
+    # so treat anything that isn't a JSON object as "no answer".
+    if not isinstance(answer, dict):
+        return None
+    name = answer.get("category")
     # Belt and braces on top of the schema enum: only a real category counts.
     return name if name in categories else None
 
