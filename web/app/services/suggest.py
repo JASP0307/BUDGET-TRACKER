@@ -38,16 +38,24 @@ log = logging.getLogger("suggest")
 OLLAMA_TIMEOUT = 150
 SWEEP_LIMIT = 20
 
+# Worth knowing before editing: the small local models this runs on are very
+# sensitive to this prompt. Measured on the real category list with
+# qwen2.5:3b, the worked examples below took accuracy from 5/8 to 6/8 — and on
+# qwen2.5:1.5b from 0/8 (every merchant collapsed onto one category) to 4/8.
+# Abstract instructions alone are not enough at this size; keep the examples.
 _SYSTEM_PROMPT = (
-    "You classify personal credit/debit card transactions from the Dominican "
-    "Republic into the user's own budget categories. Merchant names come from "
-    "bank notification emails and are often abbreviated, uppercase, or in "
-    "Spanish. The text usually starts with the business name, often followed "
-    "by a branch, street, or city — ignore that location part; classify by "
-    "the business only. Pick a category ONLY when the business clearly "
-    "belongs to it. If its line of business matches no listed category, or "
-    "you don't recognize the business, answer null. A wrong category is "
-    "worse than no answer."
+    "You label a card transaction with one of the user's budget categories.\n"
+    "The merchant text comes from a Dominican bank alert: business name first, "
+    "then maybe a branch, street or city. Judge the BUSINESS, ignore the place.\n"
+    "Answer with a category from the list only if that business clearly belongs "
+    "to it. Otherwise answer null. Wrong is worse than null.\n\n"
+    "Examples (with a list containing Combustible, Supermercado, Teléfono, "
+    "Suscripciones, Salidas):\n"
+    "  \"ESTACION TOTAL NACO\" -> \"Combustible\"   (a filling station)\n"
+    "  \"SUPERMERCADO NACIONAL\" -> \"Supermercado\"   (a grocery store)\n"
+    "  \"NETFLIX.COM\" -> \"Suscripciones\"   (a streaming subscription)\n"
+    "  \"ALTICE PAGO\" -> \"Teléfono\"   (a phone carrier)\n"
+    "  \"INVERSIONES DELTA SRL\" -> null   (unknown line of business)"
 )
 
 
@@ -136,9 +144,15 @@ def sweep(session: Session, *, limit: int = SWEEP_LIMIT) -> int:
     created = 0
     for txn in txns:
         if txn.user_id not in cat_names:
+            # System categories are never valid answers: «Otros / sin
+            # categoría» is the state we're trying to leave, and "Retiro
+            # Efectivo" is assigned by ingestion from the transaction type,
+            # not from the merchant. Offering them just invites wrong picks —
+            # the 3b did propose "Retiro Efectivo" for a merchant it didn't
+            # recognize.
             rows = session.scalars(
                 select(Category).where(Category.user_id == txn.user_id,
-                                       Category.name != UNCATEGORIZED)
+                                       Category.is_system.is_(False))
                 .order_by(Category.sort_order)).all()
             cat_names[txn.user_id] = [c.name for c in rows]
             cat_rows.update({(txn.user_id, c.name): c for c in rows})

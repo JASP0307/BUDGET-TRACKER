@@ -142,6 +142,31 @@ def test_sweep_creates_suggestions_and_dedupes_merchants(client, monkeypatch):
         assert calls == ["FERRETERIA XYZ"]
 
 
+def test_sweep_never_offers_system_categories(client, monkeypatch):
+    """«Otros / sin categoría» is the state we're leaving and "Retiro Efectivo"
+    comes from the transaction type, so neither may be a candidate answer."""
+    from web.app.db import get_sessionmaker
+    from web.app.services import suggest
+
+    uid = _signup_login(client, "sug6@example.com")
+    _add_uncategorized_txn(uid, "INVERSIONES TAKATA", "k-s10")
+
+    offered = []
+
+    def fake(merchant, categories, *, url, model):
+        offered.extend(categories)
+        return None
+
+    monkeypatch.setattr(suggest, "suggest_category", fake)
+    with get_sessionmaker()() as s:
+        suggest.sweep(s)
+
+    assert offered, "the model was never asked"
+    assert "Retiro Efectivo" not in offered
+    assert "Otros / sin categoría" not in offered
+    assert "Delivery" in offered  # ordinary categories still offered
+
+
 def test_sweep_disabled_without_ollama_url(client, monkeypatch):
     from web.app.db import get_sessionmaker
     from web.app.services import suggest
