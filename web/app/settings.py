@@ -48,6 +48,7 @@ class Settings:
     session_secret: str
     base_url: str
     resend_token: str | None
+    resend_webhook_secret: str | None
     postmark_token: str | None
     from_email: str
     bootstrap_password: str | None
@@ -82,6 +83,9 @@ def get_settings() -> Settings:
         base_url=os.environ.get("BUDGET_BASE_URL", "http://localhost:8000").rstrip("/"),
         # Resend outbound (verification/reset mail). Absent → links are logged.
         resend_token=os.environ.get("BUDGET_RESEND_TOKEN"),
+        # Signs Resend's inbound webhook (whsec_…). Unset = the Resend inbound
+        # route is off and returns 404; it is never served unsigned.
+        resend_webhook_secret=os.environ.get("BUDGET_RESEND_WEBHOOK_SECRET"),
         # Postmark still receives inbound bank mail; it no longer sends.
         postmark_token=os.environ.get("BUDGET_POSTMARK_TOKEN"),
         from_email=os.environ.get("BUDGET_FROM_EMAIL", DEV_FROM_EMAIL),

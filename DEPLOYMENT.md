@@ -88,10 +88,24 @@ The multi-user web app is a separate deployment (`docker-compose.yml` → Postgr
 3. **Real domain in the `Caddyfile`,** replacing `app.example.do`. Caddy gets the
    certificate automatically; the file also allowlists Postmark's webhook IPs and
    sets HSTS.
-4. **Turn Postmark's inbound retention down to 7 days** (data-retention add-on).
-   Postmark keeps message content 45 days by default, so without this, forwarded
-   bank emails live on Postmark much longer than in our own database — which
-   contradicts what `/privacy` tells users.
+4. **Inbound mail — Postmark or Resend.** Both routes are mounted; pick one.
+   - **Resend** (free, no plan requirement): add a receiving domain such as
+     `in.<yourdomain>` and publish its MX records; create a webhook for the
+     `email.received` event pointing at
+     `https://<host>/webhooks/resend-inbound/<BUDGET_WEBHOOK_SECRET>`; put its
+     `whsec_…` signing secret in `BUDGET_RESEND_WEBHOOK_SECRET`. Set
+     `BUDGET_INBOUND_DOMAIN=in.<yourdomain>` and **clear**
+     `BUDGET_POSTMARK_INBOUND_ADDRESS` so `format_inbound_address` hands users
+     the new address. Without the signing secret the route answers 404 — it is
+     never served unsigned. Resend keeps inbound content 30 days.
+   - **Postmark** requires the **Pro** plan (~$16.50/mo) for inbound at all, and
+     its default 45-day content retention needs the data-retention add-on turned
+     down to 7 days — otherwise users' bank emails live on Postmark far longer
+     than in our own database, contradicting what `/privacy` tells them.
+
+   **Switching providers changes every user's forwarding address.** Existing
+   Gmail filters keep sending to the old one, so run both in parallel and have
+   users re-point before the old provider is torn down.
 5. **Install the retention cron** on the VPS host:
    ```cron
    30 3 * * * cd /srv/app && .venv/bin/python scripts/purge_raw_emails.py >> purge.log 2>&1

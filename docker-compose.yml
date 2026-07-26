@@ -40,7 +40,9 @@ services:
       # sent, so production refuses to boot — fail here, with a clearer message.
       BUDGET_RESEND_TOKEN: ${BUDGET_RESEND_TOKEN:?set in .env — Resend API key}
       BUDGET_FROM_EMAIL: ${BUDGET_FROM_EMAIL:?set in .env — address on a verified sending domain}
-      # Inbound only (Postmark receives forwarded bank mail; it does not send).
+      # Inbound. Either provider may be live; both routes stay mounted so the
+      # move can be done one message at a time.
+      BUDGET_RESEND_WEBHOOK_SECRET: ${BUDGET_RESEND_WEBHOOK_SECRET:-}
       BUDGET_POSTMARK_TOKEN: ${BUDGET_POSTMARK_TOKEN:-}
       BUDGET_BOOTSTRAP_PASSWORD: ${BUDGET_BOOTSTRAP_PASSWORD:-}
     expose:
