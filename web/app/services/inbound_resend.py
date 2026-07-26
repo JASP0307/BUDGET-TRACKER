@@ -70,19 +70,34 @@ def _download(url: str) -> bytes:
 
 
 def _headers_list(detail: dict) -> list[dict]:
-    """Normalise headers to Postmark's ``[{"Name", "Value"}]``. Resend has used
-    both a mapping and a list of pairs; accept either rather than guess."""
+    """Normalise headers to Postmark's ``[{"Name", "Value"}]``.
+
+    Two shapes have to survive this, both seen from Resend on real mail:
+    a mapping (what it returns today) or a list of pairs. And a *repeated*
+    header — several ``Received``, and on some forwards several
+    ``Delivered-To`` — comes back as a list of values under one name, which is
+    expanded into one entry per value here so that routing sees every one of
+    them. Names are left exactly as sent; ``ingest._route`` matches them
+    case-insensitively, because Resend lower-cases what Postmark title-cases.
+    """
     headers = detail.get("headers") or []
+    out: list[dict] = []
+
+    def emit(name: object, value: object) -> None:
+        if not name:
+            return
+        values = value if isinstance(value, list) else [value]
+        for item in values:
+            out.append({"Name": str(name), "Value": "" if item is None else str(item)})
+
     if isinstance(headers, dict):
-        return [{"Name": name, "Value": value} for name, value in headers.items()]
-    out = []
+        for name, value in headers.items():
+            emit(name, value)
+        return out
     for item in headers:
-        if not isinstance(item, dict):
-            continue
-        name = item.get("Name") or item.get("name")
-        if name:
-            out.append({"Name": name,
-                        "Value": item.get("Value") or item.get("value") or ""})
+        if isinstance(item, dict):
+            emit(item.get("Name") or item.get("name"),
+                 item.get("Value") if item.get("Value") is not None else item.get("value"))
     return out
 
 

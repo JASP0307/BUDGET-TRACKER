@@ -57,8 +57,12 @@ _TOKEN_ANYWHERE_RE = re.compile(r"(?:^|[+=<\s])u_([a-z0-9]{6,32})(?=[@=+>\s]|$)"
 # short allowlist rather than a scan of every header: routing on header content
 # means anyone who learns a token could aim mail at that account, so the fewer
 # places we honour it, the better. See the DMARC follow-up in TASKS.md.
-_ROUTING_HEADERS = ("X-Forwarded-To", "Delivered-To", "Return-Path",
-                    "X-Original-To")
+# Lower-cased, and compared lower-cased: header names are case-insensitive on
+# the wire and providers disagree in practice — Postmark sends canonical case,
+# Resend sends all-lowercase. Matching literally meant forwarded mail arriving
+# through Resend read none of these and would have routed nowhere.
+_ROUTING_HEADERS = frozenset({"x-forwarded-to", "delivered-to", "return-path",
+                              "x-original-to"})
 _GMAIL_CODE_RE = re.compile(r"\b(\d{9})\b")  # legacy numeric confirmation code
 # Modern Gmail forwarding-confirmation "click to confirm" link (vf- = verify).
 _GMAIL_CONFIRM_LINK_RE = re.compile(
@@ -320,8 +324,16 @@ def _route(session: Session, payload: dict):
     """
     tokens: list[str] = []
 
-    def add(value: str | None, *, anywhere: bool = False) -> None:
-        value = (value or "").strip()
+    def add(value: object | None, *, anywhere: bool = False) -> None:
+        # A repeated header (several Delivered-To on a re-forwarded message)
+        # arrives as a list from some providers. Recurse rather than stringify:
+        # str(["u_tok@x"]) wraps the address in quotes and the token pattern,
+        # which anchors on address delimiters, then fails to see it.
+        if isinstance(value, (list, tuple)):
+            for item in value:
+                add(item, anywhere=anywhere)
+            return
+        value = str(value or "").strip()
         if not value:
             return
         if anywhere:
@@ -354,7 +366,7 @@ def _route(session: Session, payload: dict):
 
     # 4. Delivery headers, for forwarded mail whose To is the user's own address.
     for header in payload.get("Headers", []) or []:
-        if isinstance(header, dict) and header.get("Name") in _ROUTING_HEADERS:
+        if isinstance(header, dict) and str(header.get("Name") or "").lower() in _ROUTING_HEADERS:
             add(header.get("Value"), anywhere=True)
 
     for token in tokens:

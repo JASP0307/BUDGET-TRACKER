@@ -21,6 +21,30 @@ INBOUND = f"{PMHASH}+u_{TOKEN}@inbound.postmarkapp.com"
 GMAIL_RETURN_PATH = f"<user+caf_={PMHASH}+u_{TOKEN}=inbound.postmarkapp.com@gmail.com>"
 
 
+def test_routing_headers_match_case_insensitively(client):
+    """Header names are case-insensitive on the wire and providers disagree:
+    Postmark title-cases, Resend lower-cases. Matching literally meant one
+    provider's forwarded mail routed and the other's silently did not."""
+    token = _own_token(client)
+    payload = _forwarded_payload(token)
+    payload["Headers"] = [{"Name": h["Name"].lower(), "Value": h["Value"]}
+                          for h in payload["Headers"]]
+    assert _route(payload) is not None
+
+
+def test_repeated_routing_header_arrives_as_a_list(client):
+    """A re-forwarded message carries several Delivered-To, which some
+    providers hand over as a list under one name. Routing must read every
+    value: the token is in the second one, and the whole message is lost if a
+    list aborts the lookup — or if it is flattened with str(), which quotes the
+    address out of reach of the token pattern."""
+    token = _own_token(client)
+    payload = _forwarded_payload(token)
+    payload["Headers"] = [{"Name": "Delivered-To",
+                           "Value": ["user@gmail.com", f"u_{token}@in.example.do"]}]
+    assert _route(payload) is not None
+
+
 def _route(payload):
     from web.app.db import get_sessionmaker
     from web.app.services.ingest import _route as route

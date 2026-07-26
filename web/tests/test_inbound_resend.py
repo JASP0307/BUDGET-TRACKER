@@ -75,6 +75,45 @@ def test_delivery_headers_survive_translation():
     assert "Return-Path" in names and "Delivered-To" in names
 
 
+def test_lowercase_delivery_headers_still_route(client, monkeypatch):
+    """REGRESSION (2026-07-26, caught on the first real Resend delivery):
+    Resend lower-cases header names where Postmark title-cases them, and the
+    routing allowlist was matched literally. Auto-forwarded mail — whose `to`
+    is the bank's addressee, so headers are the only clue — would have routed
+    nowhere, silently, exactly like the Postmark bug a day earlier."""
+    from web.app.db import get_sessionmaker
+    from web.app.models import RawEmail
+
+    token = _own_token(client)
+    detail = _detail(token, to=["user@gmail.com"], headers={
+        "delivered-to": "user@gmail.com",
+        "x-forwarded-to": f"u_{token}@cualtoapp.com",
+        "return-path": "notificaciones@qik.do",
+    })
+    monkeypatch.setenv("BUDGET_RESEND_WEBHOOK_SECRET", SECRET)
+    monkeypatch.setattr(inbound_resend, "fetch_email", lambda _id: detail)
+
+    assert _post(client, {"type": "email.received",
+                          "data": {"email_id": "re-lower"}}).status_code == 200
+    with get_sessionmaker()() as s:
+        raw = s.scalar(select(RawEmail).where(
+            RawEmail.provider_message_id == "re-abc-123"))
+        assert raw is not None and raw.user_id is not None
+
+
+def test_repeated_header_becomes_one_entry_per_value():
+    """`received` really does arrive as a list. A bare .strip() on it aborted
+    routing for the whole message."""
+    detail = _detail("abc123def456", headers={
+        "received": ["from mail-vs1-f52.google.com ...", "by inbound-smtp ..."],
+        "x-forwarded-to": "u_abc123def456@cualtoapp.com",
+    })
+    payload = inbound_resend.to_postmark_payload(detail)
+    received = [h for h in payload["Headers"] if h["Name"] == "received"]
+    assert len(received) == 2
+    assert all(isinstance(h["Value"], str) for h in payload["Headers"])
+
+
 def test_headers_accepted_as_a_list_of_pairs():
     """Resend has used both shapes; guessing wrong would silently break routing."""
     detail = _detail("abc123def456",
