@@ -100,6 +100,25 @@ dashboard shows them as "Sugerido: X" with accept/dismiss, and accepting also
 creates the matching rule. Merchant names never leave the box — that's the
 point of running the model locally.
 
+> **Today the model does not run on the Lenovo.** It is served by the Nitro over
+> Tailscale (`BUDGET_OLLAMA_URL=http://100.123.55.111:11434`,
+> `BUDGET_OLLAMA_MODEL=qwen2.5:3b`) because a 3 GB laptop cannot hold a model
+> good enough to be useful — see the sizing note below and the scored comparison
+> in NOTES.md. The Lenovo still owns the app, the database and the cron; only
+> inference is remote, and the sweep fails soft whenever the Nitro is asleep.
+> On the Nitro, Ollama is bound to the **tailnet IP only** so it is never
+> exposed on public Wi-Fi:
+>
+> ```sh
+> # /etc/systemd/system/ollama.service.d/tailnet.conf
+> [Service]
+> Environment="OLLAMA_HOST=100.123.55.111:11434"
+> ```
+>
+> The unit has `Restart=always`, so it retries until Tailscale is up. Local CLI
+> use needs `export OLLAMA_HOST=100.123.55.111:11434` (added to `~/.bashrc`).
+> Revisit when the server moves to hardware that can host the model itself.
+
 1. **Install Ollama and pull the model** on the deploy host. With root, the
    official installer works (`curl -fsSL https://ollama.com/install.sh | sh` —
    installs a systemd service). On the Lenovo there is no passwordless sudo, so
@@ -112,20 +131,24 @@ point of running the model locally.
    ollama serve >> ~/ollama.log 2>&1 &   # kept alive by an @reboot cron
    ollama pull qwen2.5:3b
    ```
-   **Pick the model by the host's free RAM, and measure — don't assume.** On
-   the Lenovo (2 cores, 3.3 GB RAM, ~1.2 GB baseline) `qwen2.5:3b` loads at
-   ~1.9 GB, leaves ~370 MB available, and thrashes into swap: a *five-token*
-   call took 23s and a full sweep took 9m40s with timeouts. `qwen2.5:1.5b`
-   (~1 GB) is what runs there — 10–15s per warm call, quality good enough to be
-   useful (fuel, telecom, subscriptions, gym right; ice-cream shop and Amazon
-   wrong, which is exactly what accept/dismiss is for). A host with real
-   headroom should use `qwen2.5:7b` (~5 GB). Set with
-   `BUDGET_OLLAMA_MODEL=qwen2.5:1.5b` in `~/.config/budget-web.env`.
+   **Pick the model by measuring it on real merchants, not by size.** The
+   scored comparison is in NOTES.md → "Which local model, measured"; the short
+   version is that `qwen2.5:3b` (1.9 GB) beat `gemma4:e2b` (7.2 GB) 7/8 vs 5/8
+   and was ~10× faster, and `qwen2.5:1.5b` managed only 4/8. Ollama's
+   cloud-hosted models (`gemma4:cloud`) are **not usable here at all** — they
+   ignore the `format` JSON schema and answer in prose.
 
-   The model unloads after ~5 min idle, so the RAM comes back between sweeps
-   and **every** sweep pays a cold load — that is why `OLLAMA_TIMEOUT` is 150s.
-   Also keep the desktop session closed on that box: Firefox + VS Code were
-   holding ~2 GB, which alone made any model unusable.
+   RAM is what rules a host out. On the Lenovo (2 cores, 3.3 GB, ~1.2 GB
+   baseline) `qwen2.5:3b` leaves ~370 MB available and thrashes into swap: a
+   *five-token* call took 23s and a full sweep 9m40s with timeouts. That is why
+   inference moved to the Nitro. `qwen2.5:1.5b` does fit there (10–15s/call) and
+   is installed as a dormant fallback, but at 4/8 it is not worth switching back
+   to. A host with real headroom should try `qwen2.5:7b` (~5 GB).
+
+   A model unloads after ~5 min idle, so **every** sweep pays a cold load — that
+   is why `OLLAMA_TIMEOUT` is 150s. And if you ever do run the model on the
+   Lenovo, keep its desktop session closed: Firefox + VS Code were holding
+   ~2 GB, which alone made any model unusable.
 2. **Env (optional):** defaults are `BUDGET_OLLAMA_URL=http://127.0.0.1:11434`
    and `BUDGET_OLLAMA_MODEL=qwen2.5:3b`. Setting `BUDGET_OLLAMA_URL=""`
    disables the sweep entirely.
