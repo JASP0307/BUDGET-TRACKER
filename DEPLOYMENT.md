@@ -92,6 +92,37 @@ The multi-user web app is a separate deployment (`docker-compose.yml` → Postgr
 Never expose `docker-compose.lan.yml` — it runs plain HTTP with
 `BUDGET_ENV=development`, so cookies aren't Secure and the secret guard is off.
 
+### Category suggestions (local LLM, optional)
+
+A cron sweep (`scripts/suggest_categories.py`) asks a **local Ollama model** to
+propose a category for transactions stuck in «Otros / sin categoría»; the
+dashboard shows them as "Sugerido: X" with accept/dismiss, and accepting also
+creates the matching rule. Merchant names never leave the box — that's the
+point of running the model locally.
+
+1. **Install Ollama and pull the model** on the deploy host:
+   ```sh
+   curl -fsSL https://ollama.com/install.sh | sh   # installs a systemd service
+   ollama pull qwen2.5:3b
+   ```
+   RAM: the 3b model needs ~2–3 GB free alongside Postgres + the app. If the
+   box has headroom, `qwen2.5:7b` (~5 GB) classifies noticeably better — set
+   `BUDGET_OLLAMA_MODEL=qwen2.5:7b`.
+2. **Env (optional):** defaults are `BUDGET_OLLAMA_URL=http://127.0.0.1:11434`
+   and `BUDGET_OLLAMA_MODEL=qwen2.5:3b`. Setting `BUDGET_OLLAMA_URL=""`
+   disables the sweep entirely.
+3. **Install the cron** (same host pattern as the retention cron):
+   ```cron
+   */15 * * * * cd /srv/app && flock -n /tmp/suggest.lock .venv/bin/python scripts/suggest_categories.py >> suggest.log 2>&1
+   ```
+   Preview with `--dry-run`. The sweep caps itself at 50 transactions per run
+   and makes one model call per distinct merchant.
+
+The webhook never calls the model — an Ollama outage only means no new
+suggestions until the next sweep. Suggestions are conservative by design (the
+prompt prefers "no answer" over a wrong guess); dismissed suggestions are
+remembered and not re-asked.
+
 ### The Cloudflare named tunnel (public access, since 2026-07-25)
 
 The Lenovo is reachable from the internet at **https://cualtoapp.com** (and

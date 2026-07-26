@@ -91,6 +91,23 @@
           </select>
         </form>
       </div>
+      {% if suggestions and tx.id in suggestions %}
+      <div class="txn-meta">
+        <span class="muted">✨ {{ t('Sugerido') }}:
+          <strong>{{ suggestions[tx.id].category.name }}</strong></span>
+        <span>
+          <form class="inline" method="post"
+                action="/transactions/{{ tx.id }}/accept-suggestion">
+            <button type="submit" class="pill">{{ t('Aceptar') }}</button>
+          </form>
+          <form class="inline" method="post"
+                action="/transactions/{{ tx.id }}/dismiss-suggestion">
+            <button type="submit" class="pill"
+                    aria-label="{{ t('Descartar sugerencia') }}">✕</button>
+          </form>
+        </span>
+      </div>
+      {% endif %}
     </li>
     {% else %}
     <li class="txn muted">{{ t('Sin transacciones todavía. Los consumos que lleguen por correo aparecerán aquí.') }}</li>

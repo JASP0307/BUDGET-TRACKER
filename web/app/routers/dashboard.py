@@ -20,10 +20,11 @@ from budgetcore.categorize import UNCATEGORIZED
 from ..auth.deps import current_user, optional_user
 from ..db import get_sessionmaker
 from ..i18n import normalize_lang
-from ..models import (Budget, Card, Category, InboundAddress, RawEmail, Rule,
-                      Transaction, User)
+from ..models import (Budget, Card, Category, CategorySuggestion,
+                      InboundAddress, RawEmail, Rule, Transaction, User)
 from ..services.inbound import format_inbound_address
 from ..services.ingest import _next_month, recategorize_uncategorized
+from ..services.suggest import prune_stale
 
 router = APIRouter()
 
@@ -75,10 +76,16 @@ def home(request: Request, user: User = Depends(current_user)):
             RawEmail.processing_status.in_(["unrecognized", "failed"]))) or 0
         inbound = session.scalar(select(InboundAddress).where(
             InboundAddress.user_id == user.id, InboundAddress.active.is_(True)))
+        # LLM-proposed categories for still-uncategorized transactions,
+        # keyed by transaction id for the template's accept/dismiss chips.
+        suggestions = {s.transaction_id: s for s in session.scalars(
+            select(CategorySuggestion)
+            .where(CategorySuggestion.user_id == user.id,
+                   CategorySuggestion.dismissed.is_(False)))}
         return templates.TemplateResponse(request, "dashboard.html", {
             "month": month_start, "rows": rows, "recent": recent,
             "categories": categories, "needs_review": needs_review,
-            "problem_mail": problem_mail,
+            "problem_mail": problem_mail, "suggestions": suggestions,
             "inbound_addr": format_inbound_address(inbound.token) if inbound else None,
         })
 
@@ -114,6 +121,54 @@ def recategorize(txn_id: uuid.UUID, category_id: uuid.UUID = Form(...),
         if (txn is not None and txn.user_id == user.id
                 and category is not None and category.user_id == user.id):
             txn.category_id = category_id
+            # A hand-picked category supersedes any pending LLM suggestion.
+            sugg = session.scalar(select(CategorySuggestion).where(
+                CategorySuggestion.transaction_id == txn.id))
+            if sugg is not None:
+                session.delete(sugg)
+            session.commit()
+    return RedirectResponse("/", status_code=303)
+
+
+@router.post("/transactions/{txn_id}/accept-suggestion")
+def accept_suggestion(txn_id: uuid.UUID, user: User = Depends(current_user)):
+    """Apply the LLM's proposed category AND mint a rule for the merchant, so
+    the rule engine handles this merchant deterministically from now on. The
+    fresh rule is retro-applied to sibling uncategorized transactions — same
+    flow as adding a rule by hand on /rules."""
+    with get_sessionmaker()() as session:
+        sugg = session.scalar(select(CategorySuggestion).where(
+            CategorySuggestion.transaction_id == txn_id,
+            CategorySuggestion.user_id == user.id))
+        txn = session.get(Transaction, txn_id)
+        category = session.get(Category, sugg.category_id) if sugg else None
+        if (sugg is not None and txn is not None and txn.user_id == user.id
+                and category is not None and category.user_id == user.id):
+            txn.category_id = category.id
+            substring = (txn.merchant or "").strip().upper()[:120]
+            exists = substring and session.scalar(select(Rule).where(
+                Rule.user_id == user.id, Rule.substring == substring))
+            if substring and not exists:
+                session.add(Rule(user_id=user.id, substring=substring,
+                                 category_id=category.id))
+            session.delete(sugg)
+            session.flush()  # make the new rule visible to the retro-apply pass
+            recategorize_uncategorized(session, user.id)
+            prune_stale(session, user.id)  # siblings just left "uncategorized"
+            session.commit()
+    return RedirectResponse("/", status_code=303)
+
+
+@router.post("/transactions/{txn_id}/dismiss-suggestion")
+def dismiss_suggestion(txn_id: uuid.UUID, user: User = Depends(current_user)):
+    """Hide a suggestion. The row is kept (flagged) so the sweep won't ask the
+    model about this transaction again."""
+    with get_sessionmaker()() as session:
+        sugg = session.scalar(select(CategorySuggestion).where(
+            CategorySuggestion.transaction_id == txn_id,
+            CategorySuggestion.user_id == user.id))
+        if sugg is not None:
+            sugg.dismissed = True
             session.commit()
     return RedirectResponse("/", status_code=303)
 

@@ -48,6 +48,8 @@ class Settings:
     from_email: str
     bootstrap_password: str | None
     postmark_inbound_address: str | None
+    ollama_url: str
+    ollama_model: str
 
     @property
     def is_production(self) -> bool:
@@ -83,6 +85,11 @@ def get_settings() -> Settings:
         # When set, per-user forward addresses use its mailbox-hash form instead
         # of a custom inbound domain. See services.inbound.format_inbound_address.
         postmark_inbound_address=os.environ.get("BUDGET_POSTMARK_INBOUND_ADDRESS"),
+        # Local LLM (Ollama) for category suggestions. Not secrets. Setting
+        # BUDGET_OLLAMA_URL to an empty string disables the suggestion sweep.
+        ollama_url=os.environ.get(
+            "BUDGET_OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/"),
+        ollama_model=os.environ.get("BUDGET_OLLAMA_MODEL", "qwen2.5:3b"),
     )
 
 

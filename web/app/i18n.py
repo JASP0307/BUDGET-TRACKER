@@ -78,6 +78,9 @@ _EN = {
     "Definir presupuesto": "Set budget",
     "sin presupuesto": "no budget",
     "Movimientos recientes": "Recent activity",
+    "Sugerido": "Suggested",
+    "Aceptar": "Accept",
+    "Descartar sugerencia": "Dismiss suggestion",
     "Sin transacciones todavía. Los consumos que lleguen por correo aparecerán aquí.":
         "No transactions yet. Charges that arrive by email will appear here.",
     "Reenvía las notificaciones de tus tarjetas a":

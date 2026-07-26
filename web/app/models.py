@@ -141,6 +141,33 @@ class Transaction(Base):
     category: Mapped[Category | None] = relationship()
 
 
+class CategorySuggestion(Base):
+    """An LLM-proposed category for a still-uncategorized transaction.
+
+    Written by the background sweep (services.suggest), shown on the dashboard
+    as "Sugerido: X" with accept/dismiss. Accepting applies the category AND
+    mints a Rule, so the deterministic rule engine remains the source of truth
+    and the LLM only ever handles merchants no rule has seen yet. A separate
+    table (not columns on transactions) so `create_all` creates it on deploy —
+    create_all never adds columns to an existing table.
+    """
+
+    __tablename__ = "category_suggestions"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    transaction_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("transactions.id"), unique=True)  # one live suggestion per txn
+    category_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("categories.id"))
+    model: Mapped[str] = mapped_column(String(80))  # e.g. "ollama:qwen2.5:3b"
+    # Dismissed rows are kept (not deleted) so the sweep doesn't re-suggest
+    # the same thing on its next run — the row is the "already asked" marker.
+    dismissed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    category: Mapped[Category] = relationship()
+
+
 class Budget(Base):
     __tablename__ = "budgets"
     __table_args__ = (UniqueConstraint("user_id", "category_id", "month"),)
