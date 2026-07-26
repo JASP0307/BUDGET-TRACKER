@@ -70,21 +70,21 @@ The multi-user web app is a separate deployment (`docker-compose.yml` → Postgr
    next step). Generate each with `openssl rand -hex 32` (the Fernet key with
    the one-liner in `.env.example`). A failed boot prints every problem at once
    — read the container log.
-2. **Configure outbound mail (Postmark).** Without it `send_email` only *logs*
-   the message, so registration says "check your email" while the confirmation
-   link dies in the log — the app looks fine and every signup is lost. Same
-   Postmark account as inbound, but three separate things must be true:
-   - the account is **approved for outbound** (new accounts are restricted and
-     deliver only to your own verified addresses — this makes a broken setup
-     look fixed when you test it on yourself);
-   - a **Sender Signature / verified domain** exists for your domain, with its
-     DKIM and Return-Path DNS records published;
-   - `BUDGET_POSTMARK_TOKEN` (Servers → your server → API Tokens — the *Server*
-     API token, not the account token) and `BUDGET_FROM_EMAIL` (an address on
-     the verified signature) are in `.env`.
+2. **Configure outbound mail (Resend).** Without it `send_email` only *logs* the
+   message, so registration says "check your email" while the confirmation link
+   dies in the log — the app looks fine and every signup is lost. Add your domain
+   in Resend, publish the DKIM/SPF records it gives you, wait for **verified**,
+   then put the API key in `BUDGET_RESEND_TOKEN` and an address on that domain in
+   `BUDGET_FROM_EMAIL`. Free tier is 3,000/month with a **100/day** cap.
 
-   Free tier is 100 emails/month. Verify with Postmark's Activity view, not just
-   your inbox: a delivered-but-spam-foldered mail means DKIM/DMARC needs work.
+   Outbound is *not* Postmark. Postmark gates sending behind a manual account
+   approval — while it is pending, it accepts only recipients on your own
+   domain, which looks like success when you test on yourself and drops every
+   real user's mail (`ErrorCode 412`). That cost this app a day of lost signups.
+   Postmark still handles **inbound** (next steps); the two are independent.
+
+   Verify in Resend's dashboard, not just your inbox: a delivered-but-spam-
+   foldered mail means DKIM/DMARC needs work.
 3. **Real domain in the `Caddyfile`,** replacing `app.example.do`. Caddy gets the
    certificate automatically; the file also allowlists Postmark's webhook IPs and
    sets HSTS.

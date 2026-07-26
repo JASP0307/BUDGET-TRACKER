@@ -1,6 +1,11 @@
-"""Outbound transactional email (verification, later password reset).
+"""Outbound transactional email (verification, password reset).
 
-Mirrors how the rest of the app treats optional integrations: if Postmark is
+Sends through **Resend**. Postmark was the original provider and still handles
+inbound, but it gates outbound behind a manual account approval that left real
+signups unconfirmable for a day; Resend requires only a verified domain, and its
+free tier covers this scale. Inbound is a separate migration.
+
+Mirrors how the rest of the app treats optional integrations: if a key is
 configured it sends; otherwise it logs the message so local development and
 tests work without any mail provider.
 
@@ -9,7 +14,7 @@ a 500 *after* the account row is committed — the caller has no way to undo tha
 and the user would be left with an account they can't reach. Instead the whole
 message is logged, which keeps the link recoverable by an operator. Production
 is not allowed to run without a provider at all: settings.require_production_secrets
-blocks startup, so the no-token path below is a development convenience only.
+blocks startup, so the no-key path below is a development convenience only.
 """
 
 from __future__ import annotations
@@ -22,32 +27,31 @@ from ..settings import get_settings
 
 log = logging.getLogger("email")
 
-_POSTMARK_URL = "https://api.postmarkapp.com/email"
+_RESEND_URL = "https://api.resend.com/emails"
 
 
 def send_email(to: str, subject: str, text_body: str) -> None:
     settings = get_settings()
-    if not settings.postmark_token:
-        log.info("email (not sent, no Postmark token) to=%s subject=%s\n%s",
+    if not settings.resend_token:
+        log.info("email (not sent, no Resend key) to=%s subject=%s\n%s",
                  to, subject, text_body)
         return
     try:
         resp = requests.post(
-            _POSTMARK_URL,
-            headers={"X-Postmark-Server-Token": settings.postmark_token,
+            _RESEND_URL,
+            headers={"Authorization": f"Bearer {settings.resend_token}",
                      "Accept": "application/json"},
-            json={"From": settings.from_email, "To": to,
-                  "Subject": subject, "TextBody": text_body,
-                  "MessageStream": "outbound"},
+            json={"from": settings.from_email, "to": [to],
+                  "subject": subject, "text": text_body},
             timeout=15,
         )
         resp.raise_for_status()
     except requests.RequestException as exc:
-        # Postmark puts the actual reason in the response body, not the status:
-        # a 422 is ErrorCode 412 (account pending approval), 300 (unconfirmed
-        # sender signature) or 406 (inactive recipient) — all fixed in different
-        # places. Without the body the log says only "422" and the operator has
-        # to reproduce the call by hand to learn anything.
+        # The reason is in the response body, not the status — an unverified
+        # sending domain, a rejected From address and a rate limit all surface
+        # as a 4xx. Without the body the log says only "422" and the operator
+        # has to reproduce the call by hand to learn anything, which is exactly
+        # what happened on the first live failure.
         detail = getattr(exc.response, "text", "") or str(exc)
         log.error("email (send failed: %s) to=%s subject=%s\n%s",
                   detail, to, subject, text_body)

@@ -14,7 +14,7 @@ def _prod_env(monkeypatch, **overrides):
         "BUDGET_TELEGRAM_WEBHOOK_SECRET": GOOD,
         "BUDGET_FERNET_KEY": GOOD,
         "BUDGET_BASE_URL": "https://budget.example.do",
-        "BUDGET_POSTMARK_TOKEN": GOOD,
+        "BUDGET_RESEND_TOKEN": GOOD,
         "BUDGET_FROM_EMAIL": "no-reply@budget.example.do",
     }
     env.update(overrides)
@@ -48,7 +48,7 @@ def test_development_never_raises(monkeypatch):
     "BUDGET_FERNET_KEY",
     # Without these, registration promises a confirmation email the app can
     # never send — the signup is accepted and then silently lost.
-    "BUDGET_POSTMARK_TOKEN",
+    "BUDGET_RESEND_TOKEN",
     "BUDGET_FROM_EMAIL",
 ])
 def test_missing_secret_blocks_startup(monkeypatch, env_var):

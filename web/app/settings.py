@@ -47,6 +47,7 @@ class Settings:
     telegram_webhook_secret: str
     session_secret: str
     base_url: str
+    resend_token: str | None
     postmark_token: str | None
     from_email: str
     bootstrap_password: str | None
@@ -79,7 +80,9 @@ def get_settings() -> Settings:
         session_secret=os.environ.get("BUDGET_SESSION_SECRET", "dev-session-secret-change-me"),
         # Absolute origin used to build links in outbound email.
         base_url=os.environ.get("BUDGET_BASE_URL", "http://localhost:8000").rstrip("/"),
-        # Postmark outbound (verification/reset mail). Absent → links are logged.
+        # Resend outbound (verification/reset mail). Absent → links are logged.
+        resend_token=os.environ.get("BUDGET_RESEND_TOKEN"),
+        # Postmark still receives inbound bank mail; it no longer sends.
         postmark_token=os.environ.get("BUDGET_POSTMARK_TOKEN"),
         from_email=os.environ.get("BUDGET_FROM_EMAIL", DEV_FROM_EMAIL),
         # If set, the bootstrap user gets this password so the dev can log in.
@@ -141,13 +144,13 @@ def require_production_secrets(settings: Settings | None = None) -> None:
     # Without an outbound provider, send_email only logs (see services/email.py):
     # registration still says "check your email" and the confirmation link dies
     # in the log. Signups are silently lost, so this fails closed like the rest.
-    if not settings.postmark_token:
+    if not settings.resend_token:
         problems.append(
-            "BUDGET_POSTMARK_TOKEN is not set, so confirmation and password "
+            "BUDGET_RESEND_TOKEN is not set, so confirmation and password "
             "reset mail would never be sent")
     if not settings.from_email or settings.from_email == DEV_FROM_EMAIL:
         problems.append(
-            "BUDGET_FROM_EMAIL must be a Postmark-verified sender address "
+            "BUDGET_FROM_EMAIL must be an address on a verified sending domain "
             f"(got {settings.from_email!r})")
 
     if problems:

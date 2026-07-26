@@ -36,10 +36,12 @@ services:
       BUDGET_TELEGRAM_WEBHOOK_SECRET: ${BUDGET_TELEGRAM_WEBHOOK_SECRET:?set in .env}
       BUDGET_SESSION_SECRET: ${BUDGET_SESSION_SECRET:?set in .env}
       BUDGET_BASE_URL: ${BUDGET_BASE_URL:?set in .env — must be https://}
-      # Outbound mail. Without these, signup confirmations are never sent, so
-      # production refuses to boot — fail here instead, with a clearer message.
-      BUDGET_POSTMARK_TOKEN: ${BUDGET_POSTMARK_TOKEN:?set in .env — Postmark server API token}
-      BUDGET_FROM_EMAIL: ${BUDGET_FROM_EMAIL:?set in .env — a Postmark-verified sender}
+      # Outbound mail (Resend). Without these, signup confirmations are never
+      # sent, so production refuses to boot — fail here, with a clearer message.
+      BUDGET_RESEND_TOKEN: ${BUDGET_RESEND_TOKEN:?set in .env — Resend API key}
+      BUDGET_FROM_EMAIL: ${BUDGET_FROM_EMAIL:?set in .env — address on a verified sending domain}
+      # Inbound only (Postmark receives forwarded bank mail; it does not send).
+      BUDGET_POSTMARK_TOKEN: ${BUDGET_POSTMARK_TOKEN:-}
       BUDGET_BOOTSTRAP_PASSWORD: ${BUDGET_BOOTSTRAP_PASSWORD:-}
     expose:
       - "8000"
