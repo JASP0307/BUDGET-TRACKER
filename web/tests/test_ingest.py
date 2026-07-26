@@ -283,6 +283,26 @@ def test_backfill_does_not_double_count_live_charge(client):
         assert "backfilled 0 transactions (1 skipped)" in raw.note
 
 
+def test_backfill_names_attachments_that_never_downloaded(client):
+    """A contentless attachment is the provider adapter failing, not the user
+    forwarding junk, and the note has to say so: when Resend's .eml files came
+    back empty the batch read "0 transactions (12 skipped)", which is exactly
+    what a batch of non-bank mail looks like, and the real fault stayed hidden."""
+    token = _token(client)
+    payload = _backfill_payload("bf4", token, [
+        {"Name": "Consumo.eml", "ContentType": "message/rfc822", "Content": ""},
+        _eml_attachment(QIK_SENDER, QIK_SUBJECT, "qik_purchase.html"),
+    ])
+    assert _post(client, payload).json() == {"status": "backfilled"}
+
+    from web.app.db import get_sessionmaker
+    from web.app.models import RawEmail
+    with get_sessionmaker()() as s:
+        raw = s.scalar(select(RawEmail).where(RawEmail.provider_message_id == "bf4"))
+        assert raw.note == ("backfilled 1 transactions (0 skipped)"
+                            " — 1 could not be downloaded")
+
+
 def test_backfill_skips_non_bank_attachment(client):
     """The bank-domain guard applies per attachment, so a spoofed .eml inside a
     backfill batch is dropped just like a spoofed live email."""

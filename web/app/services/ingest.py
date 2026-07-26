@@ -268,11 +268,23 @@ def _process_attachments(session: Session, raw: RawEmail,
                          attachments: list[dict]) -> None:
     """Ingest each forwarded bank email in a backfill batch. One archival
     RawEmail (the outer forward) owns all the resulting transactions; a bad
-    attachment is counted and skipped, never aborting the rest."""
-    processed = skipped = 0
+    attachment is counted and skipped, never aborting the rest.
+
+    Attachments that arrive with no content are counted apart from the ones we
+    read and rejected. They mean the provider adapter failed to fetch them, not
+    that the user forwarded something we don't parse — a distinction that cost a
+    day when Resend's empty .eml files were indistinguishable, in the note, from
+    mail that simply wasn't from a bank (2026-07-26).
+    """
+    processed = skipped = empty = 0
     for i, att in enumerate(attachments):
         try:
             data = base64.b64decode(att.get("Content", "") or "")
+            if not data:
+                log.error("backfill attachment %d of raw_email %s has no content "
+                          "(%r) — provider fetch failed", i, raw.id, att.get("Name"))
+                empty += 1
+                continue
             sender, subject, html = _parse_eml(data)
             status, _ = _ingest_transaction(
                 session, raw, sender, subject, html,
@@ -284,6 +296,8 @@ def _process_attachments(session: Session, raw: RawEmail,
         skipped += status != "processed"
     raw.processing_status = "backfilled"
     raw.note = f"backfilled {processed} transactions ({skipped} skipped)"
+    if empty:
+        raw.note += f" — {empty} could not be downloaded"
 
 
 def _parse_eml(data: bytes) -> tuple[str, str, str]:

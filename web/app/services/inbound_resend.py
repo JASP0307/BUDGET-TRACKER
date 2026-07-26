@@ -1,8 +1,9 @@
 """Resend inbound → the Postmark-shaped payload ``ingest.handle_inbound`` reads.
 
 Postmark's inbound webhook is self-contained: one POST carries the body, the
-headers and the attachments. Resend's carries **metadata only** — the body,
-headers and attachment content each need a second authenticated call. So this
+headers and the attachments. Resend's carries **metadata only** — the body and
+headers need a second authenticated call, and attachment *content* a third,
+since not even the fetched email names a URL for it. So this
 module reassembles a message before ingestion, and translates it into the shape
 the existing pipeline already understands. Nothing in ``ingest`` changes; the
 routing rules, the bank registry, dedupe and the retention behaviour are shared
@@ -101,6 +102,58 @@ def _headers_list(detail: dict) -> list[dict]:
     return out
 
 
+def _is_eml(att: dict) -> bool:
+    """A forwarded bank email inside a backfill batch, rather than a statement."""
+    name = str(att.get("filename") or att.get("name") or "")
+    ctype = str(att.get("content_type") or att.get("contentType") or "").lower()
+    return ctype.startswith("message/rfc822") or name.lower().endswith(".eml")
+
+
+def _url_of(att: dict) -> str:
+    return str(att.get("download_url") or att.get("downloadUrl") or "")
+
+
+def _download_urls(email_id: str, wanted: list[dict]) -> dict[str, str]:
+    """Attachment id → pre-signed download URL, for the parts we mean to read.
+
+    Needed because the attachment entries *inside* a fetched email carry
+    identity only — id, filename, content type, size — and no URL. The URL lives
+    on the attachment endpoints, so the content of a forwarded email costs a
+    third call on top of the webhook and the fetch. One list call covers a whole
+    batch; ``has_more`` says that list is paginated, so rather than trust the
+    first page to hold everything, whatever is still missing is asked for by id.
+
+    A failure here is logged and returned as a gap, not raised: the caller
+    already treats a contentless attachment as a skip.
+    """
+    urls: dict[str, str] = {}
+    try:
+        resp = requests.get(f"{_API}/emails/receiving/{email_id}/attachments",
+                            headers=_auth(), timeout=_TIMEOUT)
+        resp.raise_for_status()
+        for item in resp.json().get("data") or []:
+            if isinstance(item, dict) and item.get("id") and _url_of(item):
+                urls[str(item["id"])] = _url_of(item)
+    except (requests.RequestException, ValueError):
+        log.exception("could not list attachments of received email %s", email_id)
+
+    for att in wanted:
+        att_id = str(att.get("id") or "")
+        if not att_id or att_id in urls:
+            continue
+        try:
+            resp = requests.get(
+                f"{_API}/emails/receiving/{email_id}/attachments/{att_id}",
+                headers=_auth(), timeout=_TIMEOUT)
+            resp.raise_for_status()
+            if url := _url_of(resp.json()):
+                urls[att_id] = url
+        except (requests.RequestException, ValueError):
+            log.exception("could not resolve attachment %s of received email %s",
+                          att_id, email_id)
+    return urls
+
+
 def _attachments(detail: dict) -> list[dict]:
     """Postmark-shaped attachments, content downloaded and base64-encoded.
 
@@ -110,20 +163,35 @@ def _attachments(detail: dict) -> list[dict]:
     no bandwidth. A download that fails is logged and dropped: the batch it
     belongs to already tolerates a bad attachment, and failing the whole
     delivery over one is worse than backfilling the rest.
+
+    REGRESSION (2026-07-26): this used to read ``download_url`` straight off the
+    attachment entry, the way Postmark hands over content inline. Resend never
+    sends one there, so every .eml arrived empty and a real 12-email backfill
+    parsed as "0 transactions (12 skipped)" — a silent failure, because an empty
+    body simply looks like mail from a sender that isn't a bank. URLs now come
+    from ``_download_urls``, and a part we cannot resolve is logged as an error.
     """
+    items = [a for a in (detail.get("attachments") or []) if isinstance(a, dict)]
+    wanted = [a for a in items if _is_eml(a)]
+    urls: dict[str, str] = {}
+    if any(not _url_of(att) for att in wanted):
+        urls = _download_urls(
+            str(detail.get("id") or detail.get("email_id") or ""), wanted)
+
     out = []
-    for att in detail.get("attachments") or []:
-        if not isinstance(att, dict):
-            continue
-        name = att.get("filename") or att.get("name") or ""
-        ctype = (att.get("content_type") or att.get("contentType") or "").lower()
+    for att in items:
+        name = str(att.get("filename") or att.get("name") or "")
+        ctype = str(att.get("content_type") or att.get("contentType") or "").lower()
         item = {"Name": name, "ContentType": ctype, "Content": ""}
-        url = att.get("download_url") or att.get("downloadUrl")
-        if url and (ctype.startswith("message/rfc822") or name.lower().endswith(".eml")):
-            try:
-                item["Content"] = base64.b64encode(_download(url)).decode()
-            except requests.RequestException:
-                log.exception("attachment download failed: %s", name)
+        if _is_eml(att):
+            url = _url_of(att) or urls.get(str(att.get("id") or ""), "")
+            if not url:
+                log.error("no download url for forwarded email %r", name)
+            else:
+                try:
+                    item["Content"] = base64.b64encode(_download(url)).decode()
+                except requests.RequestException:
+                    log.exception("attachment download failed: %s", name)
         out.append(item)
     return out
 

@@ -163,6 +163,88 @@ def test_only_rfc822_attachments_are_downloaded(monkeypatch):
     assert payload["Attachments"][1]["Content"] == ""
 
 
+class _Resp:
+    """Enough of a requests.Response for the adapter's two uses of it."""
+
+    def __init__(self, payload=None, content=b""):
+        self._payload, self.content = payload, content
+
+    def json(self):
+        return self._payload
+
+    def raise_for_status(self):
+        pass
+
+
+def _fake_transport(monkeypatch, *, listed, single=None, eml=b"From: bank\r\n\r\nx"):
+    """Stand in for the attachment endpoints. Records the URLs asked for."""
+    seen = []
+
+    def _get(url, headers=None, timeout=None):
+        seen.append(url)
+        if url.endswith("/attachments"):
+            return _Resp({"object": "list", "has_more": bool(single), "data": listed})
+        if "/attachments/" in url:
+            return _Resp(single)
+        return _Resp(content=eml)
+
+    monkeypatch.setattr(inbound_resend.requests, "get", _get)
+    return seen
+
+
+def test_attachment_urls_are_resolved_when_the_email_omits_them(monkeypatch):
+    """REGRESSION (2026-07-26, first real backfill through Resend): a fetched
+    email lists its attachments with an id and a size but **no URL** — unlike
+    Postmark, which inlines the content. Reading `download_url` off the entry
+    yielded empty .eml files, and an empty forwarded email is indistinguishable
+    from one sent by a stranger, so a 12-email backfill reported "0 transactions
+    (12 skipped)" and looked like an ordinary rejection."""
+    seen = _fake_transport(monkeypatch, listed=[
+        {"id": "att-1", "download_url": "https://cdn/eml-1"}])
+    detail = _detail("abc123def456", attachments=[
+        {"id": "att-1", "filename": "Consumo.eml", "content_type": "message/rfc822",
+         "size": 10936}])
+
+    payload = inbound_resend.to_postmark_payload(detail)
+
+    assert seen[0] == "https://api.resend.com/emails/receiving/re-abc-123/attachments"
+    assert "https://cdn/eml-1" in seen
+    assert base64.b64decode(payload["Attachments"][0]["Content"]).startswith(b"From:")
+
+
+def test_attachment_missing_from_the_listing_is_fetched_by_id(monkeypatch):
+    """The listing is paginated (`has_more`), so it is not proof of absence."""
+    seen = _fake_transport(
+        monkeypatch, listed=[{"id": "att-1", "download_url": "https://cdn/eml-1"}],
+        single={"id": "att-2", "download_url": "https://cdn/eml-2"})
+    detail = _detail("abc123def456", attachments=[
+        {"id": "att-1", "filename": "a.eml", "content_type": "message/rfc822"},
+        {"id": "att-2", "filename": "b.eml", "content_type": "message/rfc822"}])
+
+    payload = inbound_resend.to_postmark_payload(detail)
+
+    assert ("https://api.resend.com/emails/receiving/re-abc-123/attachments/att-2"
+            in seen)
+    assert all(a["Content"] for a in payload["Attachments"])
+
+
+def test_pdf_costs_no_attachment_lookup(monkeypatch):
+    """A statement attached to a forward must not trigger the URL dance."""
+    seen = _fake_transport(monkeypatch, listed=[])
+    payload = inbound_resend.to_postmark_payload(_detail("abc123def456", attachments=[
+        {"id": "att-1", "filename": "estado.pdf", "content_type": "application/pdf"}]))
+    assert seen == [] and payload["Attachments"][0]["Content"] == ""
+
+
+def test_unresolvable_attachment_leaves_content_empty(monkeypatch):
+    """Resend answering nothing useful must not raise: the rest of the batch
+    still deserves to be backfilled."""
+    _fake_transport(monkeypatch, listed=[], single={})
+    payload = inbound_resend.to_postmark_payload(_detail("abc123def456", attachments=[
+        {"id": "att-1", "filename": "a.eml", "content_type": "message/rfc822"}]))
+    assert payload["Attachments"][0]["Content"] == ""
+
+
 def test_failed_attachment_download_does_not_fail_the_message(monkeypatch):
     """One bad attachment must not cost us the whole delivery."""
     def _boom(url, timeout=None):
