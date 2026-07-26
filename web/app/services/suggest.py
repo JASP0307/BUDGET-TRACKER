@@ -30,10 +30,13 @@ from ..settings import get_settings
 
 log = logging.getLogger("suggest")
 
-# Local model on CPU: generous per-call timeout, small per-run cap so a cron
-# tick finishes well before the next one starts.
-OLLAMA_TIMEOUT = 60
-SWEEP_LIMIT = 50
+# Local model on CPU. The timeout has to cover a *cold* call: Ollama unloads an
+# idle model after ~5 minutes, so the first call of each sweep pays the load
+# from disk — measured at over 60s on the Lenovo (2 cores, 3.3 GB RAM), while
+# warm calls there run 10–15s. The per-run cap keeps a tick comfortably inside
+# the 15-minute cron interval even when every transaction is a new merchant.
+OLLAMA_TIMEOUT = 150
+SWEEP_LIMIT = 20
 
 _SYSTEM_PROMPT = (
     "You classify personal credit/debit card transactions from the Dominican "

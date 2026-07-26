@@ -100,14 +100,32 @@ dashboard shows them as "Sugerido: X" with accept/dismiss, and accepting also
 creates the matching rule. Merchant names never leave the box — that's the
 point of running the model locally.
 
-1. **Install Ollama and pull the model** on the deploy host:
+1. **Install Ollama and pull the model** on the deploy host. With root, the
+   official installer works (`curl -fsSL https://ollama.com/install.sh | sh` —
+   installs a systemd service). On the Lenovo there is no passwordless sudo, so
+   it's a **user-mode install** like cloudflared and gh:
    ```sh
-   curl -fsSL https://ollama.com/install.sh | sh   # installs a systemd service
+   mkdir -p ~/.local/ollama-dist ~/.local/bin
+   curl -fsSL https://ollama.com/download/ollama-linux-amd64.tgz \
+     | tar -xz -C ~/.local/ollama-dist
+   ln -sf ~/.local/ollama-dist/bin/ollama ~/.local/bin/ollama
+   ollama serve >> ~/ollama.log 2>&1 &   # kept alive by an @reboot cron
    ollama pull qwen2.5:3b
    ```
-   RAM: the 3b model needs ~2–3 GB free alongside Postgres + the app. If the
-   box has headroom, `qwen2.5:7b` (~5 GB) classifies noticeably better — set
-   `BUDGET_OLLAMA_MODEL=qwen2.5:7b`.
+   **Pick the model by the host's free RAM, and measure — don't assume.** On
+   the Lenovo (2 cores, 3.3 GB RAM, ~1.2 GB baseline) `qwen2.5:3b` loads at
+   ~1.9 GB, leaves ~370 MB available, and thrashes into swap: a *five-token*
+   call took 23s and a full sweep took 9m40s with timeouts. `qwen2.5:1.5b`
+   (~1 GB) is what runs there — 10–15s per warm call, quality good enough to be
+   useful (fuel, telecom, subscriptions, gym right; ice-cream shop and Amazon
+   wrong, which is exactly what accept/dismiss is for). A host with real
+   headroom should use `qwen2.5:7b` (~5 GB). Set with
+   `BUDGET_OLLAMA_MODEL=qwen2.5:1.5b` in `~/.config/budget-web.env`.
+
+   The model unloads after ~5 min idle, so the RAM comes back between sweeps
+   and **every** sweep pays a cold load — that is why `OLLAMA_TIMEOUT` is 150s.
+   Also keep the desktop session closed on that box: Firefox + VS Code were
+   holding ~2 GB, which alone made any model unusable.
 2. **Env (optional):** defaults are `BUDGET_OLLAMA_URL=http://127.0.0.1:11434`
    and `BUDGET_OLLAMA_MODEL=qwen2.5:3b`. Setting `BUDGET_OLLAMA_URL=""`
    disables the sweep entirely.
