@@ -65,25 +65,41 @@ The multi-user web app is a separate deployment (`docker-compose.yml` → Postgr
 1. **Set `BUDGET_ENV=production` and fill every secret in `.env`.** The app
    refuses to boot in production if `BUDGET_SESSION_SECRET`,
    `BUDGET_WEBHOOK_SECRET`, `BUDGET_TELEGRAM_WEBHOOK_SECRET` or
-   `BUDGET_FERNET_KEY` is missing, under 32 chars, or still a dev default, or if
-   `BUDGET_BASE_URL` isn't https. Generate each with `openssl rand -hex 32`
-   (the Fernet key with the one-liner in `.env.example`). A failed boot prints
-   every problem at once — read the container log.
-2. **Real domain in the `Caddyfile`,** replacing `app.example.do`. Caddy gets the
+   `BUDGET_FERNET_KEY` is missing, under 32 chars, or still a dev default, if
+   `BUDGET_BASE_URL` isn't https, or if outbound mail is unconfigured (see the
+   next step). Generate each with `openssl rand -hex 32` (the Fernet key with
+   the one-liner in `.env.example`). A failed boot prints every problem at once
+   — read the container log.
+2. **Configure outbound mail (Postmark).** Without it `send_email` only *logs*
+   the message, so registration says "check your email" while the confirmation
+   link dies in the log — the app looks fine and every signup is lost. Same
+   Postmark account as inbound, but three separate things must be true:
+   - the account is **approved for outbound** (new accounts are restricted and
+     deliver only to your own verified addresses — this makes a broken setup
+     look fixed when you test it on yourself);
+   - a **Sender Signature / verified domain** exists for your domain, with its
+     DKIM and Return-Path DNS records published;
+   - `BUDGET_POSTMARK_TOKEN` (Servers → your server → API Tokens — the *Server*
+     API token, not the account token) and `BUDGET_FROM_EMAIL` (an address on
+     the verified signature) are in `.env`.
+
+   Free tier is 100 emails/month. Verify with Postmark's Activity view, not just
+   your inbox: a delivered-but-spam-foldered mail means DKIM/DMARC needs work.
+3. **Real domain in the `Caddyfile`,** replacing `app.example.do`. Caddy gets the
    certificate automatically; the file also allowlists Postmark's webhook IPs and
    sets HSTS.
-3. **Turn Postmark's inbound retention down to 7 days** (data-retention add-on).
+4. **Turn Postmark's inbound retention down to 7 days** (data-retention add-on).
    Postmark keeps message content 45 days by default, so without this, forwarded
    bank emails live on Postmark much longer than in our own database — which
    contradicts what `/privacy` tells users.
-4. **Install the retention cron** on the VPS host:
+5. **Install the retention cron** on the VPS host:
    ```cron
    30 3 * * * cd /srv/app && .venv/bin/python scripts/purge_raw_emails.py >> purge.log 2>&1
    ```
    Bodies of successfully parsed mail are already dropped at ingestion; this
    sweeps confirmation links (7 days), unreadable-format bodies (30 days) and
    old RawEmail rows. Preview with `--dry-run`.
-5. **Smoke-test the security behavior**, not just the happy path: sign up →
+6. **Smoke-test the security behavior**, not just the happy path: sign up →
    verify → forward one real bank email → confirm the transaction appears *and*
    `raw_emails.html_body` is empty for it; reset the password and confirm a
    session open in another browser gets bounced to `/login`; delete a throwaway

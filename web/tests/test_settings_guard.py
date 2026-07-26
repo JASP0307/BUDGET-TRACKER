@@ -14,6 +14,8 @@ def _prod_env(monkeypatch, **overrides):
         "BUDGET_TELEGRAM_WEBHOOK_SECRET": GOOD,
         "BUDGET_FERNET_KEY": GOOD,
         "BUDGET_BASE_URL": "https://budget.example.do",
+        "BUDGET_POSTMARK_TOKEN": GOOD,
+        "BUDGET_FROM_EMAIL": "no-reply@budget.example.do",
     }
     env.update(overrides)
     for key, value in env.items():
@@ -44,11 +46,24 @@ def test_development_never_raises(monkeypatch):
     "BUDGET_WEBHOOK_SECRET",
     "BUDGET_TELEGRAM_WEBHOOK_SECRET",
     "BUDGET_FERNET_KEY",
+    # Without these, registration promises a confirmation email the app can
+    # never send — the signup is accepted and then silently lost.
+    "BUDGET_POSTMARK_TOKEN",
+    "BUDGET_FROM_EMAIL",
 ])
 def test_missing_secret_blocks_startup(monkeypatch, env_var):
     from web.app.settings import InsecureConfiguration, require_production_secrets
     _prod_env(monkeypatch, **{env_var: None})
     with pytest.raises(InsecureConfiguration, match=env_var):
+        require_production_secrets()
+
+
+def test_dev_from_email_blocks_startup(monkeypatch):
+    """Unset and left-at-the-default are the same failure: nothing gets sent."""
+    from web.app.settings import (DEV_FROM_EMAIL, InsecureConfiguration,
+                                  require_production_secrets)
+    _prod_env(monkeypatch, BUDGET_FROM_EMAIL=DEV_FROM_EMAIL)
+    with pytest.raises(InsecureConfiguration, match="BUDGET_FROM_EMAIL"):
         require_production_secrets()
 
 

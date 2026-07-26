@@ -47,6 +47,23 @@ def test_register_verify_login_flow(client):
     assert client.get("/").status_code == 200
 
 
+def test_register_survives_a_mail_provider_outage(client, monkeypatch):
+    """The account is committed before the send, so a provider error must not
+    500 the response — the user would have an account they never heard about."""
+    import requests
+
+    from web.app.services import email as email_service
+    monkeypatch.setenv("BUDGET_POSTMARK_TOKEN", "tok-123")
+    monkeypatch.setattr(email_service.requests, "post",
+                        lambda *a, **k: (_ for _ in ()).throw(
+                            requests.ConnectionError("postmark down")))
+
+    r = _register(client, "outage@example.com")
+    assert r.status_code == 200 and "Revisa tu correo" in r.text
+    # The account exists, so the resend path (login) can reach it later.
+    assert _user_id("outage@example.com")
+
+
 def test_login_wrong_password(client):
     _register(client, "x@example.com")
     _verify(client, "x@example.com")

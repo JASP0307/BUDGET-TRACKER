@@ -22,6 +22,9 @@ DEV_DEFAULTS = {
     "telegram_webhook_secret": "dev-tg-secret",
     "session_secret": "dev-session-secret-change-me",
 }
+# Not a secret, but reaching production with it means every verification and
+# reset mail is silently dropped (see services.email.send_email).
+DEV_FROM_EMAIL = "no-reply@localhost"
 # Long enough that guessing is hopeless; `openssl rand -hex 32` gives 64.
 MIN_SECRET_LENGTH = 32
 
@@ -78,7 +81,7 @@ def get_settings() -> Settings:
         base_url=os.environ.get("BUDGET_BASE_URL", "http://localhost:8000").rstrip("/"),
         # Postmark outbound (verification/reset mail). Absent → links are logged.
         postmark_token=os.environ.get("BUDGET_POSTMARK_TOKEN"),
-        from_email=os.environ.get("BUDGET_FROM_EMAIL", "no-reply@localhost"),
+        from_email=os.environ.get("BUDGET_FROM_EMAIL", DEV_FROM_EMAIL),
         # If set, the bootstrap user gets this password so the dev can log in.
         bootstrap_password=os.environ.get("BUDGET_BOOTSTRAP_PASSWORD"),
         # Postmark's server inbound address (e.g. <hash>@inbound.postmarkapp.com).
@@ -134,6 +137,18 @@ def require_production_secrets(settings: Settings | None = None) -> None:
     # mean verification and reset links that can't carry a login.
     if not settings.base_url.startswith("https://"):
         problems.append(f"BUDGET_BASE_URL must be https:// (got {settings.base_url!r})")
+
+    # Without an outbound provider, send_email only logs (see services/email.py):
+    # registration still says "check your email" and the confirmation link dies
+    # in the log. Signups are silently lost, so this fails closed like the rest.
+    if not settings.postmark_token:
+        problems.append(
+            "BUDGET_POSTMARK_TOKEN is not set, so confirmation and password "
+            "reset mail would never be sent")
+    if not settings.from_email or settings.from_email == DEV_FROM_EMAIL:
+        problems.append(
+            "BUDGET_FROM_EMAIL must be a Postmark-verified sender address "
+            f"(got {settings.from_email!r})")
 
     if problems:
         raise InsecureConfiguration(
