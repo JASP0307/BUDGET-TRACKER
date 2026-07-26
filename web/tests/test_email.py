@@ -75,6 +75,26 @@ def test_provider_failure_is_logged_not_raised(monkeypatch, caplog, failure):
     assert "https://x/verify?token=abc" in caplog.text
 
 
+def test_postmark_error_body_is_logged(monkeypatch, caplog):
+    """The status alone is useless: a 422 is a pending account, an unconfirmed
+    sender signature or an inactive recipient, and they are fixed differently."""
+    class _Resp:
+        text = ('{"ErrorCode":412,"Message":"While your account is pending '
+                'approval, all recipient addresses must share the same domain '
+                "as the 'From' address.\"}")
+
+        def raise_for_status(self):
+            raise requests.HTTPError("422 Client Error", response=self)
+
+    monkeypatch.setenv("BUDGET_POSTMARK_TOKEN", "tok-123")
+    monkeypatch.setattr(email.requests, "post", lambda *a, **k: _Resp())
+
+    with caplog.at_level(logging.ERROR, logger="email"):
+        email.send_email("her@example.com", "Confirma", "cuerpo")
+
+    assert "ErrorCode" in caplog.text and "412" in caplog.text
+
+
 def test_http_error_status_is_logged(monkeypatch, caplog):
     """raise_for_status is inside the guarded block, not only the request."""
     class _Resp:

@@ -43,8 +43,14 @@ def send_email(to: str, subject: str, text_body: str) -> None:
         )
         resp.raise_for_status()
     except requests.RequestException as exc:
+        # Postmark puts the actual reason in the response body, not the status:
+        # a 422 is ErrorCode 412 (account pending approval), 300 (unconfirmed
+        # sender signature) or 406 (inactive recipient) — all fixed in different
+        # places. Without the body the log says only "422" and the operator has
+        # to reproduce the call by hand to learn anything.
+        detail = getattr(exc.response, "text", "") or str(exc)
         log.error("email (send failed: %s) to=%s subject=%s\n%s",
-                  exc, to, subject, text_body)
+                  detail, to, subject, text_body)
 
 
 def send_verification_email(to: str, verify_url: str) -> None:
