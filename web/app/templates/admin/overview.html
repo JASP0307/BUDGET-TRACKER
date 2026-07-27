@@ -49,6 +49,13 @@
          class="chip {{ 'active' if key == active_filter }}">{{ label }}</a>
       {% endfor %}
     </div>
+    {% if emails and active_filter != "all" %}
+    <form class="inline" method="post" action="/admin/emails/bulk-delete"
+          onsubmit="return confirm('{{ t('¿Eliminar todos los correos de esta categoría?') }}');">
+      <input type="hidden" name="status" value="{{ active_filter }}">
+      <button class="quiet" type="submit">{{ t('Eliminar todos') }}</button>
+    </form>
+    {% endif %}
   </div>
 
   {% if emails %}

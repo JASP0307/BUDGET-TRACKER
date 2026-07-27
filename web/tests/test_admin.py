@@ -98,6 +98,56 @@ def test_email_detail_shows_body_and_delete(client):
         assert s.get(RawEmail, rid) is None
 
 
+def test_bulk_delete_scopes_to_status(client):
+    _login_owner(client)
+    from web.app.db import get_sessionmaker
+    from web.app.models import RawEmail
+    with get_sessionmaker()() as s:
+        s.add(RawEmail(provider_message_id="u1", subject="U1",
+                       processing_status="unrecognized"))
+        s.add(RawEmail(provider_message_id="u2", subject="U2",
+                       processing_status="unrecognized"))
+        s.add(RawEmail(provider_message_id="f1", subject="F1",
+                       processing_status="failed"))
+        s.add(RawEmail(provider_message_id="p1", subject="P1",
+                       processing_status="processed"))
+        s.commit()
+
+    client.post("/admin/emails/bulk-delete", data={"status": "unrecognized"})
+    with get_sessionmaker()() as s:
+        statuses = sorted(r.processing_status for r in s.scalars(select(RawEmail)))
+        assert statuses == ["failed", "processed"]
+
+
+def test_bulk_delete_blocks_all_filter(client):
+    _login_owner(client)
+    from web.app.db import get_sessionmaker
+    from web.app.models import RawEmail
+    with get_sessionmaker()() as s:
+        s.add(RawEmail(provider_message_id="p1", subject="P1",
+                       processing_status="processed"))
+        s.commit()
+
+    client.post("/admin/emails/bulk-delete", data={"status": "all"})
+    with get_sessionmaker()() as s:
+        assert s.scalar(select(func.count()).select_from(RawEmail)) == 1
+
+
+def test_bulk_delete_unknown_status_is_noop(client):
+    _login_owner(client)
+    from web.app.db import get_sessionmaker
+    from web.app.models import RawEmail
+    with get_sessionmaker()() as s:
+        s.add(RawEmail(provider_message_id="p1", subject="P1",
+                       processing_status="processed"))
+        s.commit()
+
+    r = client.post("/admin/emails/bulk-delete", data={"status": "bogus"})
+    assert r.status_code == 200
+    with get_sessionmaker()() as s:
+        assert s.scalar(select(func.count()).select_from(RawEmail)) == 1
+
+
 def test_queue_filter_scopes_to_status(client):
     _login_owner(client)
     from web.app.db import get_sessionmaker

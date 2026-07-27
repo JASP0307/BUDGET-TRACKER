@@ -15,7 +15,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 from ..templating import templates
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from .. import crypto
@@ -100,6 +100,16 @@ def delete_email(email_id: uuid.UUID, admin: User = Depends(require_admin)):
             session.delete(raw)
             session.commit()
     return RedirectResponse("/admin", status_code=303)
+
+
+@router.post("/emails/bulk-delete")
+def bulk_delete_emails(status: str = Form(...), admin: User = Depends(require_admin)):
+    _, wanted = FILTERS.get(status, (None, None))
+    if wanted:  # guards both an unknown key and the "all" filter (wanted=None)
+        with get_sessionmaker()() as session:
+            session.execute(delete(RawEmail).where(RawEmail.processing_status.in_(wanted)))
+            session.commit()
+    return RedirectResponse(f"/admin?status={status}", status_code=303)
 
 
 @router.post("/fx")
