@@ -64,6 +64,14 @@
         </div>
       </div>
     </div>
+    {% if rejected_forwards %}
+    <p class="alert err" style="margin-top:1rem">
+      {{ t('Ignoramos correos reenviados desde:') }}
+      <strong>{{ rejected_forwards|join(', ') }}</strong>.
+      {{ t('Solo aceptamos reenvíos desde el correo de tu cuenta. Si ese buzón también es tuyo, agrégalo en') }}
+      <a class="link" href="/account">{{ t('Tu cuenta') }}</a>.
+    </p>
+    {% endif %}
   </section>
 
   {# ---- Step 2: filter (one-click import) ---- #}

@@ -6,6 +6,8 @@ from pathlib import Path
 
 from sqlalchemy import select
 
+from conftest import OWNER_EMAIL
+
 FIXTURES = Path(__file__).parent.parent.parent / "core" / "tests" / "fixtures"
 
 QIK_SENDER = "notificaciones@qik.do"
@@ -121,15 +123,33 @@ def test_unknown_token_is_unrecognized(client):
 
 
 def test_non_bank_sender_is_rejected(client):
+    """A stranger aiming at a known token is stopped by the trust gate, one step
+    before the spoofing guard would have seen the sender isn't a bank."""
     resp = _post(client, _payload("m4", _token(client),
                                   sender="attacker@evil.example",
                                   html="<html>fake purchase RD$9,999.00</html>"))
-    assert resp.json()["status"] == "skipped"
+    assert resp.json()["status"] == "rejected"
 
     from web.app.db import get_sessionmaker
     from web.app.models import Transaction
     with get_sessionmaker()() as s:
         assert s.scalar(select(Transaction)) is None
+
+
+def test_spoofing_guard_still_runs_for_a_trusted_forwarder(client):
+    """The bank check is not made redundant by the trust gate: the owner can
+    forward whatever they like, and only real bank mail becomes a transaction."""
+    resp = _post(client, _payload("m4b", _token(client), sender=OWNER_EMAIL,
+                                  html="<html>fake purchase RD$9,999.00</html>"))
+    assert resp.json()["status"] == "skipped"
+
+    from web.app.db import get_sessionmaker
+    from web.app.models import RawEmail, Transaction
+    with get_sessionmaker()() as s:
+        assert s.scalar(select(Transaction)) is None
+        raw = s.scalar(select(RawEmail).where(
+            RawEmail.provider_message_id == "m4b"))
+        assert raw.note.startswith("sender not a known bank")
 
 
 def test_gmail_forwarding_confirmation_surfaces_code(client):
@@ -226,7 +246,7 @@ def _eml_attachment(sender: str, subject: str, fixture: str) -> dict:
     msg = EmailMessage()
     msg["From"] = sender
     msg["Subject"] = subject
-    msg["To"] = "me@gmail.com"
+    msg["To"] = OWNER_EMAIL
     msg.set_content("(sin texto)")
     msg.add_alternative((FIXTURES / fixture).read_text(encoding="utf-8"),
                         subtype="html")
@@ -237,7 +257,7 @@ def _eml_attachment(sender: str, subject: str, fixture: str) -> dict:
 def _backfill_payload(message_id: str, to_token: str, attachments: list) -> dict:
     return {
         "MessageID": message_id,
-        "From": "me@gmail.com",  # the user's own forward, not a bank
+        "From": OWNER_EMAIL,  # the user's own forward, not a bank
         "Subject": "Fwd: mis consumos",
         "ToFull": [{"Email": f"u_{to_token}@in.example.do"}],
         "HtmlBody": "<p>aquí están</p>",

@@ -172,3 +172,63 @@ def test_delete_logs_the_user_out(client):
                                          "confirm": "eliminar"})
     r = client.get("/", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/login"
+
+
+# ---- Verified forwarders ----
+
+def _forwarders(user_id):
+    from web.app.db import get_sessionmaker
+    from web.app.models import VerifiedForwarder
+    with get_sessionmaker()() as s:
+        return sorted(f.address for f in s.scalars(select(VerifiedForwarder)
+                      .where(VerifiedForwarder.user_id == user_id)).all())
+
+
+def test_adding_a_forwarder_stores_it_normalized(client):
+    uid = _signup(client, "fwd1@example.com")
+    _login(client, "fwd1@example.com")
+    client.post("/account/forwarders/add", data={"address": "  Work@Example.COM "})
+    assert _forwarders(uid) == ["work@example.com"]
+
+
+def test_adding_the_same_forwarder_twice_is_harmless(client):
+    uid = _signup(client, "fwd2@example.com")
+    _login(client, "fwd2@example.com")
+    for _ in range(2):
+        client.post("/account/forwarders/add", data={"address": "work@example.com"})
+    assert _forwarders(uid) == ["work@example.com"]
+
+
+def test_removing_a_forwarder(client):
+    uid = _signup(client, "fwd3@example.com")
+    _login(client, "fwd3@example.com")
+    client.post("/account/forwarders/add", data={"address": "work@example.com"})
+    client.post("/account/forwarders/remove", data={"address": "work@example.com"})
+    assert _forwarders(uid) == []
+
+
+def test_cannot_remove_another_users_forwarder(client):
+    """The remove handler scopes by user_id, so B cannot strip A's trust."""
+    a_id = _signup(client, "fwd-a@example.com")
+    _login(client, "fwd-a@example.com")
+    client.post("/account/forwarders/add", data={"address": "shared@example.com"})
+
+    _signup(client, "fwd-b@example.com")
+    _login(client, "fwd-b@example.com")
+    client.post("/account/forwarders/remove", data={"address": "shared@example.com"})
+    assert _forwarders(a_id) == ["shared@example.com"]
+
+
+def test_forwarders_require_login(client):
+    r = client.post("/account/forwarders/add", data={"address": "x@example.com"},
+                    follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/login"
+
+
+def test_deleting_an_account_removes_its_forwarders(client):
+    uid = _signup(client, "fwd-del@example.com")
+    _login(client, "fwd-del@example.com")
+    client.post("/account/forwarders/add", data={"address": "work@example.com"})
+    client.post("/account/delete", data={"password": "supersecret",
+                                         "confirm": "eliminar"})
+    assert _forwarders(uid) == []

@@ -10,6 +10,8 @@ from pathlib import Path
 
 from sqlalchemy import select
 
+from conftest import OWNER_EMAIL
+
 FIXTURES = Path(__file__).parent.parent.parent / "core" / "tests" / "fixtures"
 
 
@@ -59,11 +61,24 @@ def test_processed_email_body_is_discarded(client):
 
 
 def test_skipped_email_body_is_discarded(client):
-    """Mail from an unknown sender is skipped — and definitely not archived."""
-    resp = _post(client, _payload("r-skip", _token(), sender="spam@evil.example",
+    """Something the owner forwarded that isn't bank mail is skipped — and
+    definitely not archived. Forwarded by the owner so it clears the trust gate
+    and actually reaches the spoofing guard this test is about."""
+    resp = _post(client, _payload("r-skip", _token(), sender=OWNER_EMAIL,
                                  html="<p>nada</p>"))
     assert resp.json() == {"status": "skipped"}
     assert _raw("r-skip").html_body == ""
+
+
+def test_rejected_email_keeps_its_body(client):
+    """A rejected forward is the one case where someone else's mail is sitting
+    in the archive, so it keeps its body: the owner has to be able to see what
+    was aimed at their account before it is purged on the timed sweep."""
+    body = "<p>fake purchase RD$9,999.00</p>"
+    resp = _post(client, _payload("r-rej", _token(),
+                                  sender="attacker@evil.example", html=body))
+    assert resp.json() == {"status": "rejected"}
+    assert _raw("r-rej").html_body == body
 
 
 def test_bank_mail_judged_not_a_transaction_keeps_its_body(client):

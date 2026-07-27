@@ -331,6 +331,24 @@ _EN = {
     "Un archivo JSON con todas tus transacciones, categorías, reglas y presupuestos.":
         "A JSON file with all your transactions, categories, rules and budgets.",
     "Descargar JSON": "Download JSON",
+    # verified forwarders
+    "Correos que pueden reenviarte": "Mailboxes that can forward to you",
+    "Solo aceptamos correos reenviados desde estas direcciones. Si reenvías desde otra, lo ignoramos — así nadie más puede meter consumos en tu cuenta.":
+        "We only accept mail forwarded from these addresses. If you forward from "
+        "another one we ignore it — that way nobody else can put transactions "
+        "into your account.",
+    "tu cuenta": "your account",
+    "Y solo si los reenvía un buzón que registraste en tu cuenta: aunque alguien adivine tu dirección de reenvío, no puede meterte consumos.":
+        "And only if a mailbox you registered on your account forwarded them: "
+        "even if someone guesses your forwarding address, they cannot push "
+        "transactions onto you.",
+    "Ignoramos correos reenviados desde:": "We ignored mail forwarded from:",
+    "Solo aceptamos reenvíos desde el correo de tu cuenta. Si ese buzón también es tuyo, agrégalo en":
+        "We only accept forwards from your account's own address. If that "
+        "mailbox is yours too, add it in",
+    "Agregar otro correo": "Add another address",
+    "Agregar": "Add",
+    "Quitar": "Remove",
     "Qué guardamos": "What we store",
     "Los últimos 4 dígitos de tu tarjeta — nunca el número completo.":
         "The last 4 digits of your card — never the full number.",
