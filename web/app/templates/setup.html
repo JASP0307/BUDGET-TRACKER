@@ -27,6 +27,17 @@
       <li>{{ t('Pega ahí tu dirección de ingesta (la de arriba) y acepta. Google enviará una confirmación —') }}
         <strong>{{ t('aparecerá aquí abajo automáticamente') }}</strong>{{ t(', no tienes que buscarla.') }}</li>
     </ol>
+    <p class="muted small">{{ t('Hazlo desde el mismo Gmail con el que te registraste') }}
+      (<strong>{{ own_email }}</strong>){{ t('. Solo mostramos confirmaciones que vengan de esa cuenta.') }}</p>
+
+    {# The mistake this catches: forwarding set up from a second Gmail. The
+       confirmation is real but deliberately not surfaced, so without this the
+       page just waits forever with nothing to act on. Masked, and its link is
+       never offered — see _confirmation_state. #}
+    <p class="prereq{{ '' if mismatch_source else ' hidden' }}" id="fwd-mismatch">
+      {{ t('Recibimos una confirmación de reenvío desde') }}
+      <strong id="mismatch-addr">{{ mismatch_source or '' }}</strong>{{ t(', que no es el correo de esta cuenta.') }}
+      {{ t('Vuelve a configurar el reenvío desde') }} <strong>{{ own_email }}</strong>{{ t(', o cambia el correo de tu cuenta.') }}</p>
 
     <div id="code-box" class="code-box {{ 'shown' if confirmations }}">
       <div id="confirm-list">
@@ -248,6 +259,15 @@
       var dl = document.getElementById("filter-dl");
       if (dl) { dl.removeAttribute("aria-disabled"); dl.removeAttribute("tabindex"); }
     }
+    // A confirmation arrived from a Gmail that isn't this account's. It is
+    // never actionable here, so say so instead of leaving the user waiting.
+    function renderMismatch(masked) {
+      var box = document.getElementById("fwd-mismatch");
+      if (!box) return;
+      if (!masked) { box.classList.add("hidden"); return; }
+      document.getElementById("mismatch-addr").textContent = masked;
+      box.classList.remove("hidden");
+    }
     function showTxn() {
       document.getElementById("roundtrip").innerHTML =
         '<p class="status-line ok"><span class="check">✓</span> ' +
@@ -266,6 +286,7 @@
         if (!r.ok) return;
         var s = await r.json();
         renderConfirmations(s.confirmations);  // keeps watching for more accounts
+        renderMismatch(s.mismatch_source);
         if (s.tx_count > 0) { haveTxn = true; showTxn(); clearInterval(timer); }
       } catch (e) { /* transient — keep polling */ }
     }

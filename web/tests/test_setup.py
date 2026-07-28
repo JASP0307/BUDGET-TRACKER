@@ -224,6 +224,41 @@ def _add_confirmation(uid, source, note="https://mail.google.com/mail/vf-OK",
         s.commit()
 
 
+def test_mismatched_confirmation_is_explained_not_swallowed(client):
+    """Forwarding set up from a second Gmail: the confirmation is real but not
+    actionable here, and dropping it silently left the page waiting forever.
+    Name it — masked, and never with its link."""
+    uid = _signup_login(client, "m1@example.com")
+    _add_confirmation(uid, "otracuenta@gmail.com",
+                      note="https://mail.google.com/mail/vf-OTHER")
+
+    body = client.get("/setup/status").json()
+    assert body["confirmations"] == []
+    assert body["mismatch_source"] == "ot***@gmail.com"
+
+    html = client.get("/setup").text
+    assert "ot***@gmail.com" in html
+    assert "otracuenta@gmail.com" not in html   # never the real address
+    assert "vf-OTHER" not in html               # never the actionable link
+    assert 'id="fwd-mismatch"' in html and 'class="prereq" id="fwd-mismatch"' in html
+
+
+def test_no_mismatch_notice_when_own_confirmation_exists(client):
+    """A user whose own confirmation arrived is fine; a stranger's forward to
+    the same inbound address must not raise an alarm on their page."""
+    uid = _signup_login(client, "m2@example.com")
+    _add_confirmation(uid, "m2@example.com", mid="mine")
+    _add_confirmation(uid, "stranger@gmail.com", mid="theirs",
+                      note="https://mail.google.com/mail/vf-STRANGER")
+
+    body = client.get("/setup/status").json()
+    assert body["mismatch_source"] is None
+    assert [c["source"] for c in body["confirmations"]] == ["m2@example.com"]
+    html = client.get("/setup").text
+    assert 'class="prereq hidden" id="fwd-mismatch"' in html
+    assert "st***@gmail.com" not in html
+
+
 def test_filter_step_locked_until_forwarding_is_confirmed(client):
     """Gmail rejects a filter import whose forwardTo isn't a confirmed
     forwarding address, and says nothing useful about why — so step 2 states the

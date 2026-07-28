@@ -103,35 +103,62 @@ def _confirmation_source(subject: str) -> str | None:
     return m.group(0) if m else None
 
 
-def _pending_confirmations(session, user_id, own_email: str) -> list[dict]:
-    """The forwarding-confirmation to surface on /setup — only the one whose
-    source Gmail matches this account's own registered email, newest first, as
-    ``{"kind": "link"|"code", "value", "source"}``.
+def _mask_email(addr: str) -> str:
+    """``jabner0703@gmail.com`` → ``ja***@gmail.com``. Enough for someone to
+    recognize their own other mailbox, not enough to disclose a stranger's."""
+    local, _, domain = (addr or "").partition("@")
+    if not domain:
+        return "***"
+    # Short local parts would otherwise be revealed whole by a 2-char prefix.
+    head = local[:2] if len(local) > 3 else local[:1]
+    return f"{head}***@{domain}"
 
+
+def _confirmation_state(session, user_id, own_email: str) -> tuple[list[dict], str | None]:
+    """What /setup should say about forwarding confirmations, as
+    ``(confirmations, mismatch_source)``.
+
+    ``confirmations`` holds the one whose source Gmail matches this account's
+    own registered email, as ``{"kind": "link"|"code", "value", "source"}``.
     Anyone who knows a user's inbound address could set up forwarding to it, so
     the confirmations that land there aren't all the user's own. Restricting to
     the registered email means a user only ever sees (and is asked to confirm)
     the forward from their own Gmail — no one else's address leaks onto their
     setup page, and the list stays a single expected entry in the multi-user
     case. Returned as a list so the template/poller stay uniform; it holds 0 or
-    1 items."""
+    1 items.
+
+    ``mismatch_source`` is the *masked* source of the newest confirmation that
+    was filtered out, and only when nothing matched. Dropping those silently is
+    what made the common "signed up with one address, forwarding from another"
+    mistake unfixable: the page sat on "waiting for Google's confirmation"
+    forever with nothing to act on. Naming it — masked, and without ever
+    offering its link — keeps the disclosure property above while telling the
+    user what actually went wrong.
+    """
     own = (own_email or "").strip().lower()
     if not own:
-        return []
+        return [], None
     rows = session.scalars(
         select(RawEmail).where(RawEmail.user_id == user_id,
                                RawEmail.processing_status == "confirmation")
         .order_by(RawEmail.received_at.desc())).all()
+    mismatch = None
     for raw in rows:
         source = _confirmation_source(raw.subject)
-        if not source or source.lower() != own:
-            continue  # a forward someone else set up to this inbound address
+        if not source:
+            continue
+        if source.lower() != own:
+            # A forward set up from some other Gmail — usually the user's own
+            # second account, occasionally someone else's.
+            mismatch = mismatch or source
+            continue
         note = (raw.note or "")
         if note.startswith("http"):
-            return [{"kind": "link", "value": note, "source": source}]
+            return [{"kind": "link", "value": note, "source": source}], None
         if _CODE_RE.match(note):
-            return [{"kind": "code", "value": note, "source": source}]
-    return []
+            return [{"kind": "code", "value": note, "source": source}], None
+    return [], _mask_email(mismatch) if mismatch else None
 
 
 @router.get("/setup")
@@ -142,13 +169,16 @@ def setup_page(request: Request, user: User = Depends(current_user)):
                                           Card.bank, Card.last4)).all()
         tx_count = session.scalar(select(func.count()).select_from(Transaction)
                                   .where(Transaction.user_id == user.id)) or 0
+        confirmations, mismatch = _confirmation_state(session, user.id, user.email)
         return templates.TemplateResponse(request, "setup.html", {
             "banks": BANKS,
             "cards": cards,
             "inbound_addr": _inbound_address(session, user.id),
             "bank_from_query": BANK_FROM_QUERY,
             "backfill_query": _backfill_query(),
-            "confirmations": _pending_confirmations(session, user.id, user.email),
+            "confirmations": confirmations,
+            "mismatch_source": mismatch,
+            "own_email": user.email,
             "tx_count": tx_count,
         })
 
@@ -168,13 +198,16 @@ def gmail_filter(user: User = Depends(current_user)):
 
 @router.get("/setup/status")
 def setup_status(user: User = Depends(current_user)) -> dict:
-    """Polled by the setup page to surface the confirmation (code or link) and
-    the first transaction without a full reload."""
+    """Polled by the setup page to surface the confirmation (code or link), a
+    confirmation that arrived from the wrong Gmail, and the first transaction,
+    without a full reload."""
     with get_sessionmaker()() as session:
         tx_count = session.scalar(select(func.count()).select_from(Transaction)
                                   .where(Transaction.user_id == user.id)) or 0
+        confirmations, mismatch = _confirmation_state(session, user.id, user.email)
         return {
-            "confirmations": _pending_confirmations(session, user.id, user.email),
+            "confirmations": confirmations,
+            "mismatch_source": mismatch,
             "tx_count": int(tx_count),
         }
 

@@ -180,6 +180,15 @@ _EN = {
         "Paste your intake address (the one above) and accept. Google will send a confirmation —",
     "aparecerá aquí abajo automáticamente": "it will appear below automatically",
     ", no tienes que buscarla.": ", you don't have to look for it.",
+    "Hazlo desde el mismo Gmail con el que te registraste":
+        "Do this from the same Gmail you signed up with",
+    ". Solo mostramos confirmaciones que vengan de esa cuenta.":
+        ". We only show confirmations coming from that account.",
+    "Recibimos una confirmación de reenvío desde":
+        "We received a forwarding confirmation from",
+    ", que no es el correo de esta cuenta.": ", which is not this account's email.",
+    "Vuelve a configurar el reenvío desde": "Set the forwarding up again from",
+    ", o cambia el correo de tu cuenta.": ", or change your account's email.",
     "Primero termina el paso 1.": "Finish step 1 first.",
     "Gmail rechaza la importación si la dirección de reenvío todavía no está confirmada.":
         "Gmail rejects the import if the forwarding address isn't confirmed yet.",
