@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent
@@ -28,6 +29,7 @@ sys.path.insert(0, str(_ROOT))
 sys.path.insert(0, str(_ROOT / "core"))  # budgetcore lives in core/
 
 from web.app.db import get_sessionmaker  # noqa: E402
+from web.app.services import notify  # noqa: E402
 from web.app.services.suggest import sweep  # noqa: E402
 
 
@@ -38,13 +40,20 @@ def main() -> None:
     args = parser.parse_args()
 
     with get_sessionmaker()() as session:
-        created = sweep(session)
+        started = time.perf_counter()
+        result = sweep(session)
+        elapsed = time.perf_counter() - started
         if args.dry_run:
             session.rollback()
-            print(f"[dry-run] would create {created} suggestion(s)")
+            print(f"[dry-run] would create {result.created} suggestion(s) "
+                  f"({result.calls} model call(s))")
         else:
             session.commit()
-            print(f"created {created} suggestion(s)")
+            print(f"created {result.created} suggestion(s) "
+                  f"({result.calls} model call(s), {elapsed:.1f}s)")
+            # Only worth pinging the owner when this actually loaded the Nitro.
+            if result.calls > 0:
+                notify.notify_sweep(session, result.calls, result.created, elapsed)
 
 
 if __name__ == "__main__":

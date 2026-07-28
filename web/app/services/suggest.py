@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import dataclass
 
 import requests
 from sqlalchemy import select
@@ -37,6 +38,12 @@ log = logging.getLogger("suggest")
 # the 15-minute cron interval even when every transaction is a new merchant.
 OLLAMA_TIMEOUT = 150
 SWEEP_LIMIT = 20
+
+
+@dataclass
+class SweepResult:
+    created: int
+    calls: int  # distinct (user, merchant) pairs actually sent to Ollama
 
 # Worth knowing before editing: the small local models this runs on are very
 # sensitive to this prompt. Measured on the real category list with
@@ -129,20 +136,19 @@ def _uncategorized_txns(session: Session, *, limit: int) -> list[Transaction]:
         .limit(limit)))
 
 
-def sweep(session: Session, *, limit: int = SWEEP_LIMIT) -> int:
+def sweep(session: Session, *, limit: int = SWEEP_LIMIT) -> SweepResult:
     """Suggest categories for pending uncategorized transactions, all users.
 
     One Ollama call per distinct (user, merchant) in the run — the answer is
-    reused for that merchant's siblings. Returns the number of suggestion rows
-    created. Caller commits.
+    reused for that merchant's siblings. Caller commits.
     """
     settings = get_settings()
     if not settings.ollama_url:
-        return 0
+        return SweepResult(created=0, calls=0)
 
     txns = _uncategorized_txns(session, limit=limit)
     if not txns:
-        return 0
+        return SweepResult(created=0, calls=0)
 
     cat_names: dict = {}    # user_id -> [category names]
     cat_rows: dict = {}     # (user_id, name) -> Category
@@ -177,7 +183,7 @@ def sweep(session: Session, *, limit: int = SWEEP_LIMIT) -> int:
             category_id=cat_rows[(txn.user_id, name)].id,
             model=f"ollama:{settings.ollama_model}"))
         created += 1
-    return created
+    return SweepResult(created=created, calls=len(answers))
 
 
 def prune_stale(session: Session, user_id) -> int:

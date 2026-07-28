@@ -153,10 +153,11 @@ def test_sweep_creates_suggestions_and_dedupes_merchants(client, monkeypatch):
 
     monkeypatch.setattr(suggest, "suggest_category", fake)
     with get_sessionmaker()() as s:
-        created = suggest.sweep(s)
+        result = suggest.sweep(s)
         s.commit()
 
-    assert created == 2                 # both UBER twins, not the ferreteria
+    assert result.created == 2          # both UBER twins, not the ferreteria
+    assert result.calls == 2            # one model call per distinct merchant
     assert len(calls) == 2              # one model call per distinct merchant
     with get_sessionmaker()() as s:
         rows = s.scalars(select(CategorySuggestion)
@@ -166,8 +167,27 @@ def test_sweep_creates_suggestions_and_dedupes_merchants(client, monkeypatch):
         # A second sweep asks nothing new: suggested txns are excluded, and the
         # unmatched merchant is retried (it has no row marking it as asked).
         calls.clear()
-        assert suggest.sweep(s) == 0
+        result2 = suggest.sweep(s)
+        assert result2.created == 0
+        assert result2.calls == 1       # the ferreteria was still asked
         assert calls == ["FERRETERIA XYZ"]
+
+
+def test_sweep_reports_calls_even_when_every_answer_is_null(client, monkeypatch):
+    """A run where the model answers null for every merchant still hit
+    Ollama — `calls` must reflect that even though `created` stays 0."""
+    from web.app.db import get_sessionmaker
+    from web.app.services import suggest
+
+    uid = _signup_login(client, "sug7@example.com")
+    _add_uncategorized_txn(uid, "INVERSIONES OPACA", "k-s11")
+
+    monkeypatch.setattr(suggest, "suggest_category", lambda *a, **k: None)
+    with get_sessionmaker()() as s:
+        result = suggest.sweep(s)
+
+    assert result.created == 0
+    assert result.calls == 1
 
 
 def test_sweep_never_offers_system_categories(client, monkeypatch):
@@ -205,7 +225,59 @@ def test_sweep_disabled_without_ollama_url(client, monkeypatch):
     monkeypatch.setattr(suggest, "suggest_category",
                         lambda *a, **k: (_ for _ in ()).throw(AssertionError))
     with get_sessionmaker()() as s:
-        assert suggest.sweep(s) == 0
+        result = suggest.sweep(s)
+        assert result.created == 0
+        assert result.calls == 0
+
+
+# ---- notify_sweep ----
+
+def _owner_id():
+    from sqlalchemy import func, select
+    from web.app.db import get_sessionmaker
+    from web.app.models import User
+    from web.app.settings import get_settings
+    with get_sessionmaker()() as s:
+        return s.scalar(select(User).where(
+            func.lower(User.email) == get_settings().default_user_email.lower())).id
+
+
+def _link_owner_telegram(chat_id="999"):
+    from web.app.db import get_sessionmaker
+    from web.app.services import notify
+    with get_sessionmaker()() as s:
+        notify.set_telegram_chat(s, _owner_id(), chat_id)
+
+
+def test_notify_sweep_sends_when_owner_linked_and_calls_made(monkeypatch, client):
+    from web.app.db import get_sessionmaker
+    from web.app.services import notify, telegram
+
+    _link_owner_telegram()
+    sent = []
+    monkeypatch.setattr(telegram, "send_message",
+                        lambda chat_id, text: sent.append((chat_id, text)))
+
+    with get_sessionmaker()() as s:
+        notify.notify_sweep(s, calls=3, created=1, elapsed=12.5)
+
+    assert len(sent) == 1
+    assert sent[0][0] == "999"
+    assert "3" in sent[0][1] and "1" in sent[0][1]
+
+
+def test_notify_sweep_noop_without_linked_telegram(monkeypatch, client):
+    from web.app.db import get_sessionmaker
+    from web.app.services import notify, telegram
+
+    sent = []
+    monkeypatch.setattr(telegram, "send_message",
+                        lambda chat_id, text: sent.append((chat_id, text)))
+
+    with get_sessionmaker()() as s:
+        notify.notify_sweep(s, calls=3, created=1, elapsed=12.5)
+
+    assert sent == []
 
 
 # ---- dashboard accept / dismiss ----

@@ -9,13 +9,14 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from budgetcore.messages import transaction_message
+from budgetcore.messages import sweep_message, transaction_message
 from budgetcore.models import Transaction as CoreTxn
 
-from ..models import NotificationPref
+from ..models import NotificationPref, User
+from ..settings import get_settings
 from . import telegram
 
 TELEGRAM = "telegram"
@@ -69,3 +70,19 @@ def transaction_alert(session: Session, user_id, txn: CoreTxn,
         return
     telegram.send_message(pref.telegram_chat_id,
                           transaction_message(txn, spent, budget))
+
+
+def notify_sweep(session: Session, calls: int, created: int,
+                 elapsed: float) -> None:
+    """Tell the owner the category-suggestion sweep just loaded the machine
+    running Ollama (the Nitro) — only worth sending when it actually called
+    the model. No-op if the owner hasn't linked Telegram."""
+    owner = session.scalar(select(User).where(
+        func.lower(User.email) == get_settings().default_user_email.lower()))
+    if owner is None:
+        return
+    pref = get_pref(session, owner.id, TELEGRAM)
+    if pref is None or not pref.enabled or not pref.telegram_chat_id:
+        return
+    telegram.send_message(pref.telegram_chat_id,
+                          sweep_message(calls, created, elapsed))

@@ -30,6 +30,17 @@ def heartbeat_message(today_count: int, week_count: int, today: date) -> str:
             f"Hoy: <b>{today_count}</b> {txns} · esta semana: <b>{week_count}</b>")
 
 
+def sweep_message(calls: int, created: int, elapsed: float) -> str:
+    """The category-suggestion sweep just hit the local model — flags real CPU
+    load on the machine running Ollama, since a run with nothing to ask never
+    calls this."""
+    merchants = "comercio" if calls == 1 else "comercios"
+    suggs = "sugerencia nueva" if created == 1 else "sugerencias nuevas"
+    return (f"🤖 <b>Sugerencias de categoría</b>\n"
+            f"{calls} {merchants} consultados ({elapsed:.0f}s) · "
+            f"{created} {suggs}")
+
+
 def transaction_message(txn: Transaction, spent: float, budget: float) -> str:
     """Compose the per-transaction alert: what was charged + remaining budget."""
     merchant = html.escape(txn.merchant)
