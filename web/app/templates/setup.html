@@ -53,14 +53,25 @@
   </section>
 
   {# ---- Step 2: filter (one-click import) ---- #}
-  <section class="card step">
+  {# Locked until a confirmation has arrived: Gmail refuses to import a filter
+     whose forwardTo address is not yet a confirmed forwarding address, and its
+     error message says nothing about why. #}
+  {# Mail already flowing proves forwarding is confirmed even when the
+     confirmation row itself has aged out of the 30-day purge. #}
+  {% set filter_unlocked = confirmations or tx_count %}
+  <section class="card step{{ '' if filter_unlocked else ' locked' }}" id="step-filter-card">
     <div class="step-head">
       <span class="step-n {{ 'done' if tx_count }}" id="step-filter">2</span>
       <h2>{{ t('Filtra solo tus tarjetas') }}</h2>
     </div>
+    <p class="prereq"><strong>{{ t('Primero termina el paso 1.') }}</strong>
+      {{ t('Gmail rechaza la importación si la dirección de reenvío todavía no está confirmada.') }}</p>
+    <p class="status-line{{ ' hidden' if filter_unlocked }}" id="filter-locked">
+      <span class="dot"></span>{{ t('Disponible en cuanto confirmes el reenvío.') }}</p>
     <p class="muted" style="margin-top:0">{{ t('Para reenviar solo los correos de tus tarjetas (y nada más de tu bandeja), importa este filtro listo:') }}</p>
     <ol class="steps">
-      <li><a class="cta-btn" href="/setup/gmail-filter.xml" download>{{ t('Descargar filtro') }}</a></li>
+      <li><a class="cta-btn" href="/setup/gmail-filter.xml" download id="filter-dl"
+             {%- if not filter_unlocked %} aria-disabled="true" tabindex="-1"{% endif %}>{{ t('Descargar filtro') }}</a></li>
       <li>{{ t('Abre') }} <a class="link" href="https://mail.google.com/mail/u/0/#settings/filters"
         target="_blank" rel="noopener">{{ t('Gmail → Filtros y direcciones bloqueadas') }}</a>,
         {{ t('baja hasta') }} <strong>{{ t('Importar filtros') }}</strong>,
@@ -225,6 +236,17 @@
       document.getElementById("code-box").classList.add("shown");
       var s = document.getElementById("step-fwd");
       if (s) s.classList.add("done");
+      unlockFilter();
+    }
+    // Step 2 stays inert until step 1 has produced a confirmation, because a
+    // filter import against an unconfirmed forwarding address just errors.
+    function unlockFilter() {
+      var card = document.getElementById("step-filter-card");
+      if (card) card.classList.remove("locked");
+      var note = document.getElementById("filter-locked");
+      if (note) note.classList.add("hidden");
+      var dl = document.getElementById("filter-dl");
+      if (dl) { dl.removeAttribute("aria-disabled"); dl.removeAttribute("tabindex"); }
     }
     function showTxn() {
       document.getElementById("roundtrip").innerHTML =

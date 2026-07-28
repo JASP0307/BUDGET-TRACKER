@@ -1,13 +1,18 @@
 """Onboarding: connect the user's card-notification emails.
 
-Three steps, all resumable and driven off live state:
-  1. Register cards (bank + last4 + label).
-  2. Forward bank mail to the user's inbound address; Google's confirmation
-     code is surfaced here the moment it lands (polled via /setup/status).
-  3. Confirm the round-trip once the first real transaction arrives.
+Three steps, all resumable and driven off live state (polled via /setup/status):
+  1. Point Gmail's forwarding at the user's inbound address; Google's
+     confirmation link or code is surfaced here the moment it lands.
+  2. Import a per-user Gmail filter so only bank mail is forwarded. Gated on
+     step 1 — Gmail refuses to import a filter that forwards to an address it
+     has not confirmed yet.
+  3. A one-time backfill of the current month, since forwarding only catches
+     new mail.
 
-Categories are seeded at registration, and email is verified before login,
-so those plan steps are already behind the user by the time they reach here.
+Cards are not a step: they are auto-created from the first emails that arrive
+and offered for optional labelling afterwards. Categories are seeded at
+registration and email is verified before login, so both are already behind the
+user by the time they reach here.
 """
 
 from __future__ import annotations

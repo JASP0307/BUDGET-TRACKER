@@ -212,6 +212,63 @@ def test_backfill_query_is_date_bounded(client):
     assert f"after:{bound:%Y/%m/%d}" in html
 
 
+def _add_confirmation(uid, source, note="https://mail.google.com/mail/vf-OK",
+                      mid="conf"):
+    from web.app.db import get_sessionmaker
+    from web.app.models import RawEmail
+    with get_sessionmaker()() as s:
+        s.add(RawEmail(
+            user_id=uid, provider_message_id=mid, note=note,
+            processing_status="confirmation",
+            subject=f"(Gmail Forwarding Confirmation - Receive Mail from {source})"))
+        s.commit()
+
+
+def test_filter_step_locked_until_forwarding_is_confirmed(client):
+    """Gmail rejects a filter import whose forwardTo isn't a confirmed
+    forwarding address, and says nothing useful about why — so step 2 states the
+    prerequisite and stays inert until step 1 produces a confirmation."""
+    _signup_login(client, "r6@example.com")
+    html = client.get("/setup").text
+    assert 'class="card step locked" id="step-filter-card"' in html
+    assert 'class="status-line" id="filter-locked"' in html  # the waiting note shows
+    assert 'aria-disabled="true"' in html                    # download is inert
+    assert "Primero termina el paso 1." in html
+
+
+def test_filter_step_unlocks_once_a_confirmation_arrives(client):
+    uid = _signup_login(client, "r7@example.com")
+    _add_confirmation(uid, "r7@example.com")
+    html = client.get("/setup").text
+    assert 'class="card step" id="step-filter-card"' in html
+    assert 'class="status-line hidden" id="filter-locked"' in html
+    assert 'aria-disabled="true"' not in html
+    assert "Primero termina el paso 1." in html  # the ordering note stays
+
+
+def test_filter_step_unlocked_when_transactions_already_flow(client):
+    """A confirmation row aged out by the 30-day purge must not re-lock a step
+    for someone whose mail is demonstrably already arriving."""
+    from datetime import date
+    from web.app.db import get_sessionmaker
+    from web.app.models import Card, Category, Transaction
+    uid = _signup_login(client, "r8@example.com")
+    with get_sessionmaker()() as s:
+        card = Card(user_id=uid, bank="qik", last4="4444")
+        s.add(card)
+        s.flush()
+        cat = s.scalar(select(Category).where(Category.user_id == uid,
+                                              Category.name == "Delivery"))
+        s.add(Transaction(user_id=uid, card_id=card.id, tx_type="consumo",
+                          merchant="X", txn_date=date.today(), original_amount=10,
+                          currency="RD$", amount_dop=10, category_id=cat.id,
+                          dedupe_key="k-r8"))
+        s.commit()
+    html = client.get("/setup").text
+    assert 'class="card step" id="step-filter-card"' in html
+    assert 'aria-disabled="true"' not in html
+
+
 def test_gmail_filter_is_not_date_bounded(client):
     """The *filter* must stay unbounded — a date bound there would stop
     forwarding as soon as the month rolls over."""

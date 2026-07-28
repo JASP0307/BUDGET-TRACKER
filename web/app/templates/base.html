@@ -349,6 +349,20 @@
   .step-n.done { font-size: 0; }
   .step-n.done::after { font-size: .95rem; }
 
+  /* A step whose prerequisite isn't met yet: readable, but clearly not actionable
+     (Gmail rejects the filter import until forwarding is confirmed). */
+  .prereq {
+    margin: 0 0 .9rem; padding: .6rem .75rem; border-radius: 8px;
+    font-size: .9rem; color: var(--ink);
+    background: color-mix(in srgb, var(--warn) 12%, transparent);
+    border-left: 3px solid var(--warn);
+  }
+  .step.locked > .steps, .step.locked > .muted, .step.locked > details.advanced {
+    opacity: .45;
+  }
+  .step.locked .cta-btn { pointer-events: none; }
+  #filter-locked { margin: 0 0 .9rem; color: var(--muted); font-size: .9rem; }
+
   .card-list { list-style: none; margin: 0 0 1rem; padding: 0; }
   .card-row {
     display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;

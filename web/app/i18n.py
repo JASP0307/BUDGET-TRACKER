@@ -180,6 +180,11 @@ _EN = {
         "Paste your intake address (the one above) and accept. Google will send a confirmation —",
     "aparecerá aquí abajo automáticamente": "it will appear below automatically",
     ", no tienes que buscarla.": ", you don't have to look for it.",
+    "Primero termina el paso 1.": "Finish step 1 first.",
+    "Gmail rechaza la importación si la dirección de reenvío todavía no está confirmada.":
+        "Gmail rejects the import if the forwarding address isn't confirmed yet.",
+    "Disponible en cuanto confirmes el reenvío.":
+        "Available as soon as you confirm the forwarding.",
     "Para reenviar solo los correos de tus tarjetas (y nada más de tu bandeja), importa este filtro listo:":
         "To forward only your card emails (and nothing else from your inbox), import this ready-made filter:",
     "Gmail → Filtros y direcciones bloqueadas": "Gmail → Filters and Blocked Addresses",
