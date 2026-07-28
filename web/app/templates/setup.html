@@ -1,10 +1,12 @@
 {% extends "base.html" %}
+{% import "_clip.html" as media %}
 {% block title %}{{ t('Conectar') }} — Cualto{% endblock %}
 {% block content %}
 <div class="setup">
   <h1>{{ t('Conecta tu correo') }}</h1>
   <p class="lede">{{ t('Reenvía las notificaciones de tus tarjetas y tus consumos aparecerán aquí solos. No compartes claves del banco — solo los correos que tú eliges reenviar.') }}
-  {{ t('Haz estos pasos desde una') }} <strong>{{ t('computadora') }}</strong>.</p>
+  {{ t('Haz estos pasos desde una') }} <strong>{{ t('computadora') }}</strong>.
+  <a href="/help">{{ t('Cómo funciona') }}</a>.</p>
 
   {% if inbound_addr %}
   <p class="muted" style="margin-bottom:.35rem">{{ t('Tu dirección personal de ingesta (la usarás en los pasos de abajo):') }}</p>
@@ -27,6 +29,7 @@
       <li>{{ t('Pega ahí tu dirección de ingesta (la de arriba) y acepta. Google enviará una confirmación —') }}
         <strong>{{ t('aparecerá aquí abajo automáticamente') }}</strong>{{ t(', no tienes que buscarla.') }}</li>
     </ol>
+    {{ media.slot('step1-forwarding', t('Ver cómo se hace')) }}
     <p class="muted small">{{ t('Hazlo desde el mismo Gmail con el que te registraste') }}
       (<strong>{{ own_email }}</strong>){{ t('. Solo mostramos confirmaciones que vengan de esa cuenta.') }}</p>
 
@@ -88,6 +91,7 @@
         {{ t('baja hasta') }} <strong>{{ t('Importar filtros') }}</strong>,
         {{ t('elige el archivo descargado y pulsa') }} <strong>{{ t('Crear filtros') }}</strong>.</li>
     </ol>
+    {{ media.slot('step2-filter', t('Ver cómo se hace')) }}
     <details class="advanced">
       <summary>{{ t('Prefiero crearlo a mano') }}</summary>
       <p class="muted">{{ t('Crea un filtro con esta búsqueda y elige la acción') }}
@@ -122,6 +126,7 @@
         {{ t('y envíalos a tu dirección de ingesta.') }}</li>
       <li>{{ t('Los verás aparecer abajo en unos segundos.') }}</li>
     </ol>
+    {{ media.slot('step3-backfill', t('Ver cómo se hace')) }}
     <p class="muted small">{{ t('Opcional — puedes saltarte este paso y tus consumos se irán registrando solos desde ahora.') }}</p>
   </section>
 

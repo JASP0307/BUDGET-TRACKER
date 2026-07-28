@@ -225,6 +225,26 @@ named one: it starts a quick tunnel whenever it finds none and overwrites
 **Still to do:** HSTS is not set for this hostname (Cloudflare does not add it by
 default) — enable it in the dashboard under SSL/TLS → Edge Certificates.
 
+### Onboarding screen recordings (`/static/clips/`)
+
+`/setup` and `/help` each offer a short recording of the Gmail steps. The files
+are **git-ignored on purpose** — the repo is public and video is permanent
+weight in the history — so they do not arrive with `git pull` and have to be
+copied to the box separately:
+
+```
+rsync -av web/app/static/clips/ lenovo:~/Documents/BUDGET-TRACKER/web/app/static/clips/
+```
+
+Names are fixed, `.mp4`, with an optional same-named `.jpg` poster beside each:
+`overview` (the full walkthrough, `/help` only), `step1-forwarding`,
+`step2-filter`, `step3-backfill`. Anything absent renders as nothing at all —
+a missing clip is never an error, so the app is safe to deploy before any of
+them exist.
+
+Serve them from here rather than embedding a third-party player: the CSP this
+deployment still owes itself would otherwise need a `frame-src` hole.
+
 ### One-off migration for an existing database (2026-07-25)
 
 `main.py` still uses `create_all`, which creates missing *tables* but never adds

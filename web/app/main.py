@@ -9,15 +9,17 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from .auth.deps import NotAuthenticated
 from .auth.router import router as auth_router
 from .db import Base, get_engine, get_sessionmaker
-from .routers import (account, admin, dashboard, legal, notifications, setup,
-                      webhook)
+from .routers import (account, admin, dashboard, guide, legal,
+                      notifications, setup, webhook)
 from .services.seed import bootstrap
 from .settings import get_settings, require_production_secrets
+from .templating import STATIC_DIR
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
@@ -53,9 +55,16 @@ def create_app() -> FastAPI:
     async def _redirect_to_login(request: Request, exc: NotAuthenticated):
         return RedirectResponse("/login", status_code=303)
 
+    # Everything served from here is public and self-hosted on purpose: the
+    # onboarding recordings must not need a third-party player, which would
+    # want a frame-src hole in the CSP this deployment is still owed.
+    STATIC_DIR.mkdir(parents=True, exist_ok=True)
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
     app.include_router(webhook.router)
     app.include_router(auth_router)
     app.include_router(legal.router)
+    app.include_router(guide.router)
     app.include_router(setup.router)
     app.include_router(notifications.router)
     app.include_router(account.router)

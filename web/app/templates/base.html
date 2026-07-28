@@ -363,6 +363,18 @@
   .step.locked .cta-btn { pointer-events: none; }
   #filter-locked { margin: 0 0 .9rem; color: var(--muted); font-size: .9rem; }
 
+  /* Onboarding recordings. Collapsed by default — these sit beside instructions
+     someone is reading on a phone, and preload="none" only helps if the element
+     stays out of the way until asked for. */
+  details.clip { margin: .2rem 0 1rem; }
+  details.clip > summary {
+    cursor: pointer; font-size: .9rem; color: var(--brand); width: fit-content;
+  }
+  details.clip video {
+    display: block; width: 100%; margin-top: .7rem; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg);
+  }
+
   .card-list { list-style: none; margin: 0 0 1rem; padding: 0; }
   .card-row {
     display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
@@ -630,6 +642,7 @@
 {% if request.state.user %}<div class="nav-scrim" onclick="closeNav()" aria-hidden="true"></div>{% endif %}
 <main>{% block content %}{% endblock %}</main>
 <footer>
+  <a href="/help">{{ t('Cómo funciona') }}</a>
   <a href="/privacy">{{ t('Privacidad') }}</a>
   <a href="/security">{{ t('Seguridad') }}</a>
   {% if request.state.user %}<a href="/account">{{ t('Tus datos') }}</a>{% endif %}

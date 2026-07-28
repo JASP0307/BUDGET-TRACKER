@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% import "_clip.html" as media %}
+{% block title %}{{ t('Cómo funciona') }} — Cualto{% endblock %}
+{% block content %}
+<div class="prose">
+  <h1>{{ t('Cómo funciona') }}</h1>
+  <p class="lede">{{ t('Cualto lee las notificaciones que tu banco ya te envía por correo y arma tu presupuesto solo. No pide claves del banco: tú decides qué correos reenviar, y puedes cortarlo cuando quieras.') }}</p>
+
+  {{ media.slot('overview', t('Ver el recorrido completo')) }}
+
+  <h2>{{ t('Lo que necesitas') }}</h2>
+  <ul>
+    <li>{{ t('Una cuenta de Gmail que reciba las notificaciones de tus tarjetas.') }}</li>
+    <li>{{ t('Una computadora. Gmail para teléfono no tiene la pantalla de reenvío ni los filtros.') }}</li>
+    <li>{{ t('Unos diez minutos, una sola vez.') }}</li>
+  </ul>
+
+  <h2>{{ t('Bancos que entendemos hoy') }}</h2>
+  <ul>
+    {% for bank in banks %}<li>{{ bank }}</li>{% endfor %}
+  </ul>
+  <p class="muted">{{ t('Si tu banco no está en la lista, todavía no podemos leer sus correos.') }}</p>
+
+  <h2>{{ t('Los tres pasos') }}</h2>
+  <ol>
+    <li><strong>{{ t('Autoriza el reenvío') }}</strong> —
+      {{ t('en Gmail agregas nuestra dirección personal de ingesta como dirección de reenvío. Google te manda una confirmación y nosotros te la mostramos en la página; no tienes que buscarla en tu bandeja.') }}</li>
+    <li><strong>{{ t('Filtra solo tus tarjetas') }}</strong> —
+      {{ t('importas un filtro que te damos hecho, para que se reenvíen únicamente los correos de tus bancos y nada más de tu bandeja. Este paso va después del primero: Gmail rechaza el filtro si la dirección de reenvío todavía no está confirmada.') }}</li>
+    <li><strong>{{ t('Trae tus consumos de este mes') }}</strong> —
+      {{ t('el reenvío solo captura correos nuevos, así que una vez reenvías los del mes en curso para que el tablero no empiece vacío.') }}</li>
+  </ol>
+  <p>{{ t('Todo eso vive en tu página de conexión, con tu dirección de ingesta ya puesta:') }}
+    <a href="/setup">{{ t('Conecta tu correo') }}</a>.</p>
+
+  <h2>{{ t('Después del primer día') }}</h2>
+  <ul>
+    <li>{{ t('Al principio casi todo cae en «Otros / sin categoría». Tú creas reglas —o aceptas las que te sugerimos— y desde entonces se clasifica solo.') }}</li>
+    <li>{{ t('Los montos del presupuesto son por mes: cada mes nuevo los defines otra vez.') }}</li>
+    <li>{{ t('Las categorías que vienen puestas son un punto de partida; puedes borrarlas y crear las tuyas.') }}</li>
+  </ul>
+
+  <h2>{{ t('Cómo se corta') }}</h2>
+  <p>{{ t('Borra el filtro de reenvío en tu Gmail y dejamos de recibir correos en ese mismo instante. También puedes descargar todos tus datos o borrar la cuenta entera desde') }}
+    <a href="/account">{{ t('Tus datos') }}</a>.
+    {{ t('Qué guardamos y por cuánto tiempo está en') }} <a href="/privacy">{{ t('Privacidad') }}</a>.</p>
+</div>
+{% endblock %}

@@ -1,0 +1,20 @@
+{# A slot for an onboarding screen recording.
+
+   Renders nothing at all when the file isn't on disk (see templating.clip), so
+   every page works before the clips are filmed and in any clone that doesn't
+   carry the media.
+
+   Muted, looping and preload="none": these sit next to instructions someone is
+   reading on a phone, so nothing downloads until they ask for it. #}
+{% macro slot(name, label) %}
+{% set c = clip(name) %}
+{% if c %}
+<details class="clip">
+  <summary>{{ label }}</summary>
+  <video controls muted loop playsinline preload="none"
+         {% if c.poster %}poster="{{ c.poster }}"{% endif %}>
+    <source src="{{ c.src }}" type="video/mp4">
+  </video>
+</details>
+{% endif %}
+{% endmacro %}

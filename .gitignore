@@ -20,6 +20,12 @@ __pycache__/
 # Web app local dev
 web/dev.db
 
+# Onboarding screen recordings. Kept out of git on purpose: the repo is public
+# and video is permanent weight in the history. Deploy them by rsync (see
+# DEPLOYMENT.md); every slot renders nothing when the file is absent.
+web/app/static/clips/*
+!web/app/static/clips/.gitkeep
+
 # Locally installed agent skills
 .agents/
 .claude/skills/

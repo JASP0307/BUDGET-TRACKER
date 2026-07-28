@@ -236,6 +236,42 @@ _EN = {
     "No se pudo generar tu dirección de ingesta. Recarga la página o contacta soporte.":
         "We couldn't generate your intake address. Reload the page or contact support.",
 
+    # help / setup guide
+    "Cómo funciona": "How it works",
+    "Ver cómo se hace": "Watch how it's done",
+    "Ver el recorrido completo": "Watch the full walkthrough",
+    "Cualto lee las notificaciones que tu banco ya te envía por correo y arma tu presupuesto solo. No pide claves del banco: tú decides qué correos reenviar, y puedes cortarlo cuando quieras.":
+        "Cualto reads the notifications your bank already emails you and builds your budget on its own. It never asks for bank passwords: you choose which emails to forward, and you can cut it off whenever you want.",
+    "Lo que necesitas": "What you need",
+    "Una cuenta de Gmail que reciba las notificaciones de tus tarjetas.":
+        "A Gmail account that receives your cards' notifications.",
+    "Una computadora. Gmail para teléfono no tiene la pantalla de reenvío ni los filtros.":
+        "A computer. Gmail on the phone has neither the forwarding screen nor filters.",
+    "Unos diez minutos, una sola vez.": "About ten minutes, once.",
+    "Bancos que entendemos hoy": "Banks we understand today",
+    "Si tu banco no está en la lista, todavía no podemos leer sus correos.":
+        "If your bank isn't on the list, we can't read its emails yet.",
+    "Los tres pasos": "The three steps",
+    "en Gmail agregas nuestra dirección personal de ingesta como dirección de reenvío. Google te manda una confirmación y nosotros te la mostramos en la página; no tienes que buscarla en tu bandeja.":
+        "in Gmail you add your personal intake address as a forwarding address. Google sends a confirmation and we show it to you on the page; you don't have to hunt for it in your inbox.",
+    "importas un filtro que te damos hecho, para que se reenvíen únicamente los correos de tus bancos y nada más de tu bandeja. Este paso va después del primero: Gmail rechaza el filtro si la dirección de reenvío todavía no está confirmada.":
+        "you import a ready-made filter so that only your banks' emails are forwarded and nothing else from your inbox. This step comes after the first one: Gmail rejects the filter if the forwarding address isn't confirmed yet.",
+    "el reenvío solo captura correos nuevos, así que una vez reenvías los del mes en curso para que el tablero no empiece vacío.":
+        "forwarding only catches new email, so you forward this month's once so the dashboard doesn't start empty.",
+    "Todo eso vive en tu página de conexión, con tu dirección de ingesta ya puesta:":
+        "All of that lives on your connection page, with your intake address already filled in:",
+    "Después del primer día": "After the first day",
+    "Al principio casi todo cae en «Otros / sin categoría». Tú creas reglas —o aceptas las que te sugerimos— y desde entonces se clasifica solo.":
+        "At first almost everything lands in \"Other / uncategorized\". You create rules — or accept the ones we suggest — and from then on it sorts itself.",
+    "Los montos del presupuesto son por mes: cada mes nuevo los defines otra vez.":
+        "Budget amounts are per month: each new month you set them again.",
+    "Las categorías que vienen puestas son un punto de partida; puedes borrarlas y crear las tuyas.":
+        "The categories that come preset are a starting point; you can delete them and create your own.",
+    "Cómo se corta": "How to cut it off",
+    "Borra el filtro de reenvío en tu Gmail y dejamos de recibir correos en ese mismo instante. También puedes descargar todos tus datos o borrar la cuenta entera desde":
+        "Delete the forwarding filter in your Gmail and we stop receiving email that same instant. You can also download all your data or delete the whole account from",
+    "Qué guardamos y por cuánto tiempo está en": "What we keep and for how long is in",
+
     # footer + account page
     "Cuenta": "Account",
     "Privacidad": "Privacy",
