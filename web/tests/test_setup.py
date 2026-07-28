@@ -202,6 +202,26 @@ def test_gmail_filter_xml_contains_inbound_address(client):
     assert "forwardTo" in r.text
 
 
+def test_backfill_query_is_date_bounded(client):
+    """Step 3's search must carry its own date bound. Unbounded, users select by
+    eye and import months of old mail the current-month dashboard never shows."""
+    from datetime import date, timedelta
+    _signup_login(client, "r4@example.com")
+    bound = date.today().replace(day=1) - timedelta(days=1)
+    html = client.get("/setup").text
+    assert f"after:{bound:%Y/%m/%d}" in html
+
+
+def test_gmail_filter_is_not_date_bounded(client):
+    """The *filter* must stay unbounded — a date bound there would stop
+    forwarding as soon as the month rolls over."""
+    _signup_login(client, "r5@example.com")
+    xml = client.get("/setup/gmail-filter.xml").text
+    assert "name='from'" in xml
+    assert "notificaciones@popularenlinea.com" in xml
+    assert "after:" not in xml
+
+
 def test_cannot_touch_other_users_card(client):
     b_uid = _signup_login(client, "b@example.com")
     client.post("/cards", data={"bank": "popular", "last4": "7777", "label": "B card"})

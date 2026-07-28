@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from datetime import date, timedelta
 from xml.sax.saxutils import quoteattr
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -37,6 +38,26 @@ BANKS = bank_choices()
 BANK_FROM_QUERY = from_query()
 _CODE_RE = re.compile(r"^\d{6,}$")  # legacy numeric confirmation code
 _LAST4_RE = re.compile(r"^\d{4}$")
+
+
+def _backfill_query() -> str:
+    """The Gmail search for the one-time backfill (step 3): bank senders, bounded
+    to the current month.
+
+    The unbounded ``BANK_FROM_QUERY`` is correct for the *filter*, which has to
+    keep forwarding next month, and wrong here. Asking someone to eyeball "this
+    month's" mail out of an unbounded result list is how the first real backfill
+    imported November 2025: ten transactions that no current-month dashboard ever
+    shows, which reads as the product being broken.
+
+    The bound is the last day of the *previous* month, not the 1st, because
+    Gmail's ``after:`` is ambiguous about whether it includes the given date. An
+    overshoot of one day imports a handful of rows the dashboard won't display;
+    an undershoot silently drops the 1st of the month. Overshoot is the safer
+    error.
+    """
+    first = date.today().replace(day=1)
+    return f"from:({BANK_FROM_QUERY}) after:{first - timedelta(days=1):%Y/%m/%d}"
 
 
 def _gmail_filter_xml(forward_to: str) -> str:
@@ -121,6 +142,7 @@ def setup_page(request: Request, user: User = Depends(current_user)):
             "cards": cards,
             "inbound_addr": _inbound_address(session, user.id),
             "bank_from_query": BANK_FROM_QUERY,
+            "backfill_query": _backfill_query(),
             "confirmations": _pending_confirmations(session, user.id, user.email),
             "tx_count": tx_count,
         })

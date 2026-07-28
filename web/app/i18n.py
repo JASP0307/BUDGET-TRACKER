@@ -193,8 +193,14 @@ _EN = {
     "tu dirección de ingesta:": "your intake address:",
     "El reenvío solo captura correos nuevos. Para llenar tu tablero con lo que ya gastaste este mes, reenvíanos esos correos una sola vez:":
         "Forwarding only captures new emails. To fill your dashboard with what you've already spent this month, forward us those emails once:",
-    "En Gmail busca": "In Gmail search for",
-    "y selecciona los correos de este mes.": "and select this month's emails.",
+    "Copia esta búsqueda y pégala en el buscador de Gmail:":
+        "Copy this search and paste it into Gmail's search box:",
+    "Selecciona todos los resultados con la casilla de arriba. Ya vienen limitados a este mes, así que no tienes que escogerlos uno por uno.":
+        "Select every result with the checkbox at the top. They're already limited to this month, so you don't have to pick them one by one.",
+    "Si Gmail ofrece": "If Gmail offers",
+    "Seleccionar todas las conversaciones que coinciden con esta búsqueda":
+        "Select all conversations that match this search",
+    ", pulsa ahí también.": ", click that too.",
     "En el menú": "In the menu",
     "Más": "More",
     "elige": "choose",

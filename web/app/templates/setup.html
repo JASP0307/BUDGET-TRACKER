@@ -86,8 +86,15 @@
     </div>
     <p class="muted" style="margin-top:0">{{ t('El reenvío solo captura correos nuevos. Para llenar tu tablero con lo que ya gastaste este mes, reenvíanos esos correos una sola vez:') }}</p>
     <ol class="steps">
-      <li>{{ t('En Gmail busca') }} <code class="inline-code">from:({{ bank_from_query }})</code>
-        {{ t('y selecciona los correos de este mes.') }}</li>
+      <li>{{ t('Copia esta búsqueda y pégala en el buscador de Gmail:') }}
+        <div class="copybar">
+          <code id="backfill">{{ backfill_query }}</code>
+          <button class="small-btn" type="button"
+                  onclick="copyText('backfill', this)">{{ t('Copiar') }}</button>
+        </div>
+      </li>
+      <li>{{ t('Selecciona todos los resultados con la casilla de arriba. Ya vienen limitados a este mes, así que no tienes que escogerlos uno por uno.') }}
+        {{ t('Si Gmail ofrece') }} <strong>{{ t('Seleccionar todas las conversaciones que coinciden con esta búsqueda') }}</strong>{{ t(', pulsa ahí también.') }}</li>
       <li>{{ t('En el menú') }} <strong>⋮ ({{ t('Más') }})</strong>
         {{ t('elige') }} <strong>{{ t('Reenviar como archivo adjunto') }}</strong>
         {{ t('y envíalos a tu dirección de ingesta.') }}</li>
