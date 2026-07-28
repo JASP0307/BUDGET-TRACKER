@@ -104,7 +104,7 @@ def _confirmation_source(subject: str) -> str | None:
 
 
 def _mask_email(addr: str) -> str:
-    """``jabner0703@gmail.com`` → ``ja***@gmail.com``. Enough for someone to
+    """``mariaperez@gmail.com`` → ``ma***@gmail.com``. Enough for someone to
     recognize their own other mailbox, not enough to disclose a stranger's."""
     local, _, domain = (addr or "").partition("@")
     if not domain:
