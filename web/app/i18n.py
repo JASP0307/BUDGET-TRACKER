@@ -80,6 +80,12 @@ _EN = {
     "Movimientos recientes": "Recent activity",
     "Sugerido": "Suggested",
     "Aceptar": "Accept",
+    "Crear regla con este comercio": "Create a rule from this merchant",
+    "Cada vez que el comercio contenga este texto, se guardará en esta categoría — incluidos los consumos que ya tienes sin categoría.":
+        "Whenever the merchant contains this text, it will be filed under this category — including transactions you already have uncategorized.",
+    "Elige una categoría": "Choose a category",
+    "Guardar regla": "Save rule",
+    "Cancelar": "Cancel",
     "Descartar sugerencia": "Dismiss suggestion",
     "Sin transacciones todavía. Los consumos que lleguen por correo aparecerán aquí.":
         "No transactions yet. Charges that arrive by email will appear here.",

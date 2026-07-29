@@ -86,6 +86,7 @@ def home(request: Request, user: User = Depends(current_user)):
             "month": month_start, "rows": rows, "recent": recent,
             "categories": categories, "needs_review": needs_review,
             "problem_mail": problem_mail, "suggestions": suggestions,
+            "uncategorized": UNCATEGORIZED,
             "inbound_addr": format_inbound_address(inbound.token) if inbound else None,
         })
 
@@ -155,6 +156,49 @@ def accept_suggestion(txn_id: uuid.UUID, user: User = Depends(current_user)):
             session.flush()  # make the new rule visible to the retro-apply pass
             recategorize_uncategorized(session, user.id)
             prune_stale(session, user.id)  # siblings just left "uncategorized"
+            session.commit()
+    return RedirectResponse("/", status_code=303)
+
+
+@router.post("/transactions/{txn_id}/rule")
+def rule_from_transaction(txn_id: uuid.UUID, substring: str = Form(...),
+                          category_id: uuid.UUID = Form(...),
+                          user: User = Depends(current_user)):
+    """Mint a rule from a transaction row on the dashboard — the by-hand twin of
+    accept-suggestion. The merchant arrives prefilled and editable (bank strings
+    carry store numbers nobody wants in a rule), and the new rule is retro-applied
+    to sibling uncategorized transactions, same as adding one on /rules.
+
+    The originating transaction is moved explicitly: the retro-apply only touches
+    uncategorized rows, and this one may well have been categorized by hand
+    already — the point of the button is "and from now on, always this".
+    """
+    substring = substring.strip().upper()[:120]
+    with get_sessionmaker()() as session:
+        txn = session.get(Transaction, txn_id)
+        category = session.get(Category, category_id)
+        # A rule pointing at the fallback category says "leave this where things
+        # land with no rule at all" — a no-op that would still shadow every later
+        # rule for the same merchant, since the first match wins.
+        if category is not None and category.name == UNCATEGORIZED:
+            return RedirectResponse("/", status_code=303)
+        if (substring and txn is not None and txn.user_id == user.id
+                and category is not None and category.user_id == user.id):
+            existing = session.scalar(select(Rule).where(
+                Rule.user_id == user.id, Rule.substring == substring))
+            if existing is None:
+                session.add(Rule(user_id=user.id, substring=substring,
+                                 category_id=category.id))
+            else:  # same merchant, new mind — retarget instead of duplicating
+                existing.category_id = category.id
+            txn.category_id = category.id
+            sugg = session.scalar(select(CategorySuggestion).where(
+                CategorySuggestion.transaction_id == txn.id))
+            if sugg is not None:
+                session.delete(sugg)
+            session.flush()  # make the new rule visible to the retro-apply pass
+            recategorize_uncategorized(session, user.id)
+            prune_stale(session, user.id)
             session.commit()
     return RedirectResponse("/", status_code=303)
 

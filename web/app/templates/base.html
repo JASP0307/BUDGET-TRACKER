@@ -224,6 +224,57 @@
     gap: .75rem; margin-top: .2rem; font-size: .85rem; color: var(--muted);
   }
 
+  .txn-actions { display: flex; align-items: center; gap: .35rem; flex: none; }
+  /* The rule button costs the meta row ~2rem; on a narrow phone the date+card
+     line gives that back rather than pushing the select off the card. */
+  .txn-meta > .num {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  /* ---- row popover (make a rule out of a transaction) ----
+     A transaction row has no room for a worded button, so the action is an
+     icon that opens a `popover` panel — light-dismiss and Esc come from the
+     platform. The panel is `display: none` by default and only shown through
+     `:popover-open`, so a browser that doesn't support popovers drops that
+     rule and keeps the panel hidden instead of dumping a form into the page. */
+  .icon-btn {
+    flex: none; display: grid; place-items: center; padding: .4rem;
+    background: none; border: 1px solid var(--line); border-radius: 8px;
+    color: var(--muted); cursor: pointer;
+  }
+  .icon-btn:hover { color: var(--brand); border-color: var(--brand); }
+
+  .popcard {
+    display: none; width: min(23rem, calc(100vw - 2rem));
+    margin: auto; padding: 1.1rem;
+    background: var(--card); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 14px;
+  }
+  .popcard:popover-open { display: block; }
+  .popcard::backdrop { background: rgba(0, 0, 0, .45); }
+  .popcard h3 { margin: 0 0 .3rem; font-size: 1.05rem; }
+  .popcard p { margin: 0 0 1rem; }
+  .popcard .field span {
+    display: block; font-size: .82rem; font-weight: 600;
+    color: var(--muted); margin-bottom: .3rem;
+  }
+  .popcard input, .popcard select { width: 100%; max-width: none; }
+  .popcard input[name="substring"] {
+    font-family: var(--font-mono); font-size: .9rem;
+  }
+  .pop-actions {
+    display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1.1rem;
+  }
+  /* On a phone the same panel reads better as a sheet on the bottom edge,
+     within thumb reach and clear of the keyboard. */
+  @media (max-width: 560px) {
+    .popcard {
+      width: 100%; margin: auto auto 0; border-width: 1px 0 0;
+      border-radius: 14px 14px 0 0;
+      padding-bottom: max(1.1rem, env(safe-area-inset-bottom));
+    }
+  }
+
   /* ---- forms ---- */
   input, select, button {
     font: inherit; color: var(--ink); background: var(--card);

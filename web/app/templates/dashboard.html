@@ -82,13 +82,58 @@
       </div>
       <div class="txn-meta">
         <span class="num">{{ tx.txn_date.day }} {{ meses_abr[tx.txn_date.month - 1] }} · {{ tx.card.display }}</span>
-        <form class="inline" method="post" action="/transactions/{{ tx.id }}/category">
-          <select name="category_id" aria-label="{{ t('Categoría') }}"
-                  onchange="this.form.submit()">
-            {% for c in categories %}
-            <option value="{{ c.id }}" {{ "selected" if tx.category_id == c.id else "" }}>{{ c.name }}</option>
-            {% endfor %}
-          </select>
+        <span class="txn-actions">
+          <form class="inline" method="post" action="/transactions/{{ tx.id }}/category">
+            <select name="category_id" aria-label="{{ t('Categoría') }}"
+                    onchange="this.form.submit()">
+              {% for c in categories %}
+              <option value="{{ c.id }}" {{ "selected" if tx.category_id == c.id else "" }}>{{ c.name }}</option>
+              {% endfor %}
+            </select>
+          </form>
+          {# The row has no space for a worded button, so the rule lives behind an
+             icon that opens a popover. `popover` gives light-dismiss and Esc for
+             free; browsers without it keep the panel hidden (see base.html). #}
+          <button type="button" class="icon-btn" popovertarget="rule-{{ tx.id }}"
+                  title="{{ t('Crear regla con este comercio') }}"
+                  aria-label="{{ t('Crear regla con este comercio') }}: {{ tx.merchant }}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M20.6 13.4 12.5 5.3a2 2 0 0 0-1.4-.6H5a1 1 0 0 0-1 1v6.1a2 2 0 0 0 .6 1.4l8.1 8.1a1.5 1.5 0 0 0 2.1 0l5.8-5.8a1.5 1.5 0 0 0 0-2.1z"/>
+              <circle cx="8.2" cy="8.2" r="1.2" fill="currentColor" stroke="none"/>
+            </svg>
+          </button>
+        </span>
+      </div>
+      <div class="popcard" popover id="rule-{{ tx.id }}">
+        <h3>{{ t('Nueva regla') }}</h3>
+        <p class="muted small">{{ t('Cada vez que el comercio contenga este texto, se guardará en esta categoría — incluidos los consumos que ya tienes sin categoría.') }}</p>
+        <form method="post" action="/transactions/{{ tx.id }}/rule">
+          <label class="field">
+            <span>{{ t('Substring del comercio') }}</span>
+            <input name="substring" value="{{ tx.merchant | upper }}" required
+                   maxlength="120" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>{{ t('Categoría') }}</span>
+            {# «Otros / sin categoría» is where things land with *no* rule, so it
+               is not offered here; an uncategorized row starts on a placeholder
+               rather than preselecting a category the user never chose. #}
+            {% set filed = tx.category and tx.category.name != uncategorized %}
+            <select name="category_id" required>
+              {% if not filed %}
+              <option value="" disabled selected>{{ t('Elige una categoría') }}</option>
+              {% endif %}
+              {% for c in categories if c.name != uncategorized %}
+              <option value="{{ c.id }}" {{ "selected" if filed and tx.category_id == c.id else "" }}>{{ c.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <div class="pop-actions">
+            <button type="button" class="small-btn" popovertarget="rule-{{ tx.id }}"
+                    popovertargetaction="hide">{{ t('Cancelar') }}</button>
+            <button type="submit">{{ t('Guardar regla') }}</button>
+          </div>
         </form>
       </div>
       {% if suggestions and tx.id in suggestions %}
