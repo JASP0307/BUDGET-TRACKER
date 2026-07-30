@@ -208,6 +208,90 @@ def test_sweep_does_not_reask_a_missed_merchant(client, monkeypatch):
         assert result2.created == 0
 
 
+def _backdate_miss(user_id, merchant, days):
+    from datetime import datetime, timedelta, timezone
+
+    from web.app.db import get_sessionmaker
+    from web.app.models import CategorySuggestionMiss
+    with get_sessionmaker()() as s:
+        row = s.scalar(select(CategorySuggestionMiss).where(
+            CategorySuggestionMiss.user_id == user_id,
+            CategorySuggestionMiss.merchant == merchant))
+        row.checked_at = datetime.now(timezone.utc) - timedelta(days=days)
+        s.commit()
+
+
+def test_sweep_reasks_a_miss_past_the_ttl(client, monkeypatch):
+    """A miss older than MISS_TTL_DAYS is fair game again — a merchant the
+    model got wrong once shouldn't be blocked forever, e.g. once the user has
+    since added a category that would now fit it."""
+    from web.app.db import get_sessionmaker
+    from web.app.models import CategorySuggestionMiss
+    from web.app.services import suggest
+
+    uid = _signup_login(client, "sug9@example.com")
+    _add_uncategorized_txn(uid, "TALLER EL PRIMO", "k-s14")
+
+    monkeypatch.setattr(suggest, "suggest_category", lambda *a, **k: None)
+    with get_sessionmaker()() as s:
+        suggest.sweep(s)
+        s.commit()
+
+    _backdate_miss(uid, "TALLER EL PRIMO", suggest.MISS_TTL_DAYS + 1)
+
+    calls = []
+    monkeypatch.setattr(suggest, "suggest_category",
+                        lambda m, *a, **k: calls.append(m) or "Mantenimiento")
+    with get_sessionmaker()() as s:
+        result = suggest.sweep(s)
+        s.commit()
+
+    assert calls == ["TALLER EL PRIMO"]
+    assert result.created == 1
+    with get_sessionmaker()() as s:
+        # Resolved — the stale miss row is cleared, not left as debris.
+        assert s.scalar(select(CategorySuggestionMiss)
+                        .where(CategorySuggestionMiss.user_id == uid)) is None
+
+
+def test_sweep_reasks_after_a_model_change(client, monkeypatch):
+    """A miss recorded under one BUDGET_OLLAMA_MODEL doesn't block the same
+    merchant once a different model is configured — the old model may simply
+    have been worse."""
+    from web.app.db import get_sessionmaker
+    from web.app.models import CategorySuggestionMiss
+    from web.app.services import suggest
+
+    uid = _signup_login(client, "sug10@example.com")
+    _add_uncategorized_txn(uid, "FERRETERIA DON PEPE", "k-s15")
+
+    monkeypatch.setattr(suggest, "suggest_category", lambda *a, **k: None)
+    with get_sessionmaker()() as s:
+        suggest.sweep(s)
+        s.commit()
+    with get_sessionmaker()() as s:
+        miss = s.scalar(select(CategorySuggestionMiss)
+                        .where(CategorySuggestionMiss.user_id == uid))
+        assert miss.model == "ollama:qwen2.5:3b"
+
+    monkeypatch.setenv("BUDGET_OLLAMA_MODEL", "qwen2.5:7b")
+    calls = []
+    monkeypatch.setattr(suggest, "suggest_category",
+                        lambda m, *a, **k: calls.append(m) or None)
+    with get_sessionmaker()() as s:
+        result = suggest.sweep(s)
+        s.commit()
+
+    assert calls == ["FERRETERIA DON PEPE"]  # asked again under the new model
+    assert result.calls == 1
+    with get_sessionmaker()() as s:
+        # Same row, refreshed in place — not a second row for the same merchant.
+        misses = s.scalars(select(CategorySuggestionMiss)
+                           .where(CategorySuggestionMiss.user_id == uid)).all()
+        assert len(misses) == 1
+        assert misses[0].model == "ollama:qwen2.5:7b"
+
+
 def test_sweep_reports_calls_even_when_every_answer_is_null(client, monkeypatch):
     """A run where the model answers null for every merchant still hit
     Ollama — `calls` must reflect that even though `created` stays 0."""

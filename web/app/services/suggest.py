@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 
 import requests
 from sqlalchemy import func, select, tuple_
@@ -39,6 +40,11 @@ log = logging.getLogger("suggest")
 # the 15-minute cron interval even when every transaction is a new merchant.
 OLLAMA_TIMEOUT = 150
 SWEEP_LIMIT = 20
+
+# A miss only holds while it's this fresh AND was recorded under the model
+# currently configured — a model swap (BUDGET_OLLAMA_MODEL) or a category the
+# user added since should get a merchant reconsidered, not block it forever.
+MISS_TTL_DAYS = 30
 
 
 @dataclass
@@ -119,7 +125,8 @@ def suggest_category(merchant: str, categories: list[str], *,
     return name if name in categories else None
 
 
-def _uncategorized_txns(session: Session, *, limit: int) -> list[Transaction]:
+def _uncategorized_txns(session: Session, *, limit: int,
+                        current_model: str) -> list[Transaction]:
     """Transactions still waiting for a category and without a suggestion,
     oldest users' newest first. Withdrawals are always auto-categorized at
     ingestion, so only consumo/reversal can be here — no filter needed, but we
@@ -127,9 +134,15 @@ def _uncategorized_txns(session: Session, *, limit: int) -> list[Transaction]:
 
     Also excludes merchants the sweep already asked about and got no answer
     for (CategorySuggestionMiss) — otherwise an abstained merchant has no
-    CategorySuggestion row and gets re-sent to Ollama on every single run."""
+    CategorySuggestion row and gets re-sent to Ollama on every single run.
+    That exclusion only holds for misses still within MISS_TTL_DAYS and
+    recorded under the model configured right now — see MISS_TTL_DAYS."""
     suggested = select(CategorySuggestion.transaction_id)
-    missed = select(CategorySuggestionMiss.user_id, CategorySuggestionMiss.merchant)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=MISS_TTL_DAYS)
+    missed = select(CategorySuggestionMiss.user_id, CategorySuggestionMiss.merchant).where(
+        CategorySuggestionMiss.model == current_model,
+        CategorySuggestionMiss.checked_at >= cutoff,
+    )
     return list(session.scalars(
         select(Transaction)
         .outerjoin(Category, Transaction.category_id == Category.id)
@@ -154,7 +167,8 @@ def sweep(session: Session, *, limit: int = SWEEP_LIMIT) -> SweepResult:
     if not settings.ollama_url:
         return SweepResult(created=0, calls=0)
 
-    txns = _uncategorized_txns(session, limit=limit)
+    model_tag = f"ollama:{settings.ollama_model}"
+    txns = _uncategorized_txns(session, limit=limit, current_model=model_tag)
     if not txns:
         return SweepResult(created=0, calls=0)
 
@@ -183,12 +197,22 @@ def sweep(session: Session, *, limit: int = SWEEP_LIMIT) -> SweepResult:
             answers[key] = suggest_category(
                 txn.merchant or "", cat_names[txn.user_id],
                 url=settings.ollama_url, model=settings.ollama_model)
+            # A stale miss (past MISS_TTL_DAYS, or from a since-replaced
+            # model) isn't filtered out by _uncategorized_txns's query — it's
+            # still a row in the table, just not one we exclude on anymore.
+            # Refresh it on another miss, or drop it now that it's resolved.
+            existing_miss = session.scalar(select(CategorySuggestionMiss).where(
+                CategorySuggestionMiss.user_id == txn.user_id,
+                CategorySuggestionMiss.merchant == merchant))
             if answers[key] is None:
-                # Remember the miss so this merchant is never re-sent to
-                # Ollama — one row per (user, merchant), not per transaction.
-                session.add(CategorySuggestionMiss(
-                    user_id=txn.user_id, merchant=merchant,
-                    model=f"ollama:{settings.ollama_model}"))
+                if existing_miss is not None:
+                    existing_miss.checked_at = datetime.now(timezone.utc)
+                    existing_miss.model = model_tag
+                else:
+                    session.add(CategorySuggestionMiss(
+                        user_id=txn.user_id, merchant=merchant, model=model_tag))
+            elif existing_miss is not None:
+                session.delete(existing_miss)
         name = answers[key]
         if name is None:
             continue
@@ -196,7 +220,7 @@ def sweep(session: Session, *, limit: int = SWEEP_LIMIT) -> SweepResult:
             user_id=txn.user_id,
             transaction_id=txn.id,
             category_id=cat_rows[(txn.user_id, name)].id,
-            model=f"ollama:{settings.ollama_model}"))
+            model=model_tag))
         created += 1
     return SweepResult(created=created, calls=len(answers))
 
