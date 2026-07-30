@@ -20,13 +20,14 @@ import logging
 from dataclasses import dataclass
 
 import requests
-from sqlalchemy import select
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.orm import Session
 
 from budgetcore.categorize import UNCATEGORIZED
 from budgetcore.models import TxType
 
-from ..models import Category, CategorySuggestion, Transaction
+from ..models import (Category, CategorySuggestion, CategorySuggestionMiss,
+                      Transaction)
 from ..settings import get_settings
 
 log = logging.getLogger("suggest")
@@ -122,8 +123,13 @@ def _uncategorized_txns(session: Session, *, limit: int) -> list[Transaction]:
     """Transactions still waiting for a category and without a suggestion,
     oldest users' newest first. Withdrawals are always auto-categorized at
     ingestion, so only consumo/reversal can be here — no filter needed, but we
-    skip RETIRO defensively anyway."""
+    skip RETIRO defensively anyway.
+
+    Also excludes merchants the sweep already asked about and got no answer
+    for (CategorySuggestionMiss) — otherwise an abstained merchant has no
+    CategorySuggestion row and gets re-sent to Ollama on every single run."""
     suggested = select(CategorySuggestion.transaction_id)
+    missed = select(CategorySuggestionMiss.user_id, CategorySuggestionMiss.merchant)
     return list(session.scalars(
         select(Transaction)
         .outerjoin(Category, Transaction.category_id == Category.id)
@@ -131,6 +137,8 @@ def _uncategorized_txns(session: Session, *, limit: int) -> list[Transaction]:
             (Transaction.category_id.is_(None)) | (Category.name == UNCATEGORIZED),
             Transaction.tx_type != TxType.RETIRO.value,
             Transaction.id.not_in(suggested),
+            tuple_(Transaction.user_id,
+                  func.upper(func.trim(Transaction.merchant))).not_in(missed),
         )
         .order_by(Transaction.user_id, Transaction.created_at.desc())
         .limit(limit)))
@@ -169,11 +177,18 @@ def sweep(session: Session, *, limit: int = SWEEP_LIMIT) -> SweepResult:
             cat_names[txn.user_id] = [c.name for c in rows]
             cat_rows.update({(txn.user_id, c.name): c for c in rows})
 
-        key = (txn.user_id, (txn.merchant or "").strip().upper())
+        merchant = (txn.merchant or "").strip().upper()
+        key = (txn.user_id, merchant)
         if key not in answers:
             answers[key] = suggest_category(
                 txn.merchant or "", cat_names[txn.user_id],
                 url=settings.ollama_url, model=settings.ollama_model)
+            if answers[key] is None:
+                # Remember the miss so this merchant is never re-sent to
+                # Ollama — one row per (user, merchant), not per transaction.
+                session.add(CategorySuggestionMiss(
+                    user_id=txn.user_id, merchant=merchant,
+                    model=f"ollama:{settings.ollama_model}"))
         name = answers[key]
         if name is None:
             continue

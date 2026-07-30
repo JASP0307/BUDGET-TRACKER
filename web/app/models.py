@@ -168,6 +168,23 @@ class CategorySuggestion(Base):
     category: Mapped[Category] = relationship()
 
 
+class CategorySuggestionMiss(Base):
+    """A merchant the sweep already asked the LLM about and got no answer for
+    (`suggest_category` returned None). Recorded so the sweep never re-asks the
+    same merchant every 15 minutes — without this, an abstained merchant has no
+    CategorySuggestion row and looks identical to one never checked.
+    """
+
+    __tablename__ = "category_suggestion_misses"
+    __table_args__ = (UniqueConstraint("user_id", "merchant"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    merchant: Mapped[str] = mapped_column(String(200))  # normalized: strip().upper()
+    model: Mapped[str] = mapped_column(String(80))
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
 class Budget(Base):
     __tablename__ = "budgets"
     __table_args__ = (UniqueConstraint("user_id", "category_id", "month"),)

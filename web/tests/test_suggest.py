@@ -165,12 +165,47 @@ def test_sweep_creates_suggestions_and_dedupes_merchants(client, monkeypatch):
         assert len(rows) == 2
         assert all(r.category.name == "Delivery" for r in rows)
         # A second sweep asks nothing new: suggested txns are excluded, and the
-        # unmatched merchant is retried (it has no row marking it as asked).
+        # unmatched merchant was recorded as a miss on the first sweep, so it
+        # isn't retried either.
         calls.clear()
         result2 = suggest.sweep(s)
         assert result2.created == 0
-        assert result2.calls == 1       # the ferreteria was still asked
-        assert calls == ["FERRETERIA XYZ"]
+        assert result2.calls == 0
+        assert calls == []
+
+
+def test_sweep_does_not_reask_a_missed_merchant(client, monkeypatch):
+    """An abstained merchant gets a CategorySuggestionMiss row on first sight
+    and must never reach Ollama again — not even via a brand new transaction
+    for the same merchant text in a later run."""
+    from web.app.db import get_sessionmaker
+    from web.app.models import CategorySuggestionMiss
+    from web.app.services import suggest
+
+    uid = _signup_login(client, "sug8@example.com")
+    _add_uncategorized_txn(uid, "INVERSIONES OPACA", "k-s12")
+
+    monkeypatch.setattr(suggest, "suggest_category", lambda *a, **k: None)
+    with get_sessionmaker()() as s:
+        result = suggest.sweep(s)
+        s.commit()
+    assert result.calls == 1
+
+    with get_sessionmaker()() as s:
+        misses = s.scalars(select(CategorySuggestionMiss)
+                           .where(CategorySuggestionMiss.user_id == uid)).all()
+        assert len(misses) == 1
+        assert misses[0].merchant == "INVERSIONES OPACA"
+
+    # A second, later transaction for the exact same merchant must not be
+    # re-sent to the model either.
+    _add_uncategorized_txn(uid, "inversiones opaca", "k-s13")  # different case
+    monkeypatch.setattr(suggest, "suggest_category",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError))
+    with get_sessionmaker()() as s:
+        result2 = suggest.sweep(s)
+        assert result2.calls == 0
+        assert result2.created == 0
 
 
 def test_sweep_reports_calls_even_when_every_answer_is_null(client, monkeypatch):
