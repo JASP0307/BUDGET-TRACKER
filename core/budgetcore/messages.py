@@ -31,9 +31,8 @@ def heartbeat_message(today_count: int, week_count: int, today: date) -> str:
 
 
 def sweep_message(calls: int, created: int, elapsed: float) -> str:
-    """The category-suggestion sweep just hit the local model — flags real CPU
-    load on the machine running Ollama, since a run with nothing to ask never
-    calls this."""
+    """The category-suggestion sweep found new suggestions worth reviewing —
+    the caller only sends this when created > 0."""
     merchants = "comercio" if calls == 1 else "comercios"
     suggs = "sugerencia nueva" if created == 1 else "sugerencias nuevas"
     return (f"🤖 <b>Sugerencias de categoría</b>\n"

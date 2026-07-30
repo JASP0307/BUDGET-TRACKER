@@ -51,8 +51,9 @@ def main() -> None:
             session.commit()
             print(f"created {result.created} suggestion(s) "
                   f"({result.calls} model call(s), {elapsed:.1f}s)")
-            # Only worth pinging the owner when this actually loaded the Nitro.
-            if result.calls > 0:
+            # Only worth pinging the owner when there's something to review —
+            # a run that only racked up misses (calls > 0, created == 0) stays quiet.
+            if result.created > 0:
                 notify.notify_sweep(session, result.calls, result.created, elapsed)
 
 

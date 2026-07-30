@@ -74,9 +74,9 @@ def transaction_alert(session: Session, user_id, txn: CoreTxn,
 
 def notify_sweep(session: Session, calls: int, created: int,
                  elapsed: float) -> None:
-    """Tell the owner the category-suggestion sweep just loaded the machine
-    running Ollama (the Nitro) — only worth sending when it actually called
-    the model. No-op if the owner hasn't linked Telegram."""
+    """Tell the owner the category-suggestion sweep found something to review.
+    Caller only invokes this when the sweep actually created suggestions.
+    No-op if the owner hasn't linked Telegram."""
     owner = session.scalar(select(User).where(
         func.lower(User.email) == get_settings().default_user_email.lower()))
     if owner is None:
