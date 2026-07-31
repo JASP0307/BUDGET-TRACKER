@@ -119,18 +119,45 @@ def test_suggest_category_null_and_garbage_and_errors(monkeypatch):
 
 
 def test_suggest_category_survives_a_backend_that_ignores_the_schema(monkeypatch):
-    """Ollama's cloud-hosted models answer in prose despite `format`, and a
-    model may emit a bare `null`. Both used to escape as an AttributeError from
-    .get() and abort the whole sweep — they must read as "no answer"."""
+    """A backend that ignores `format` must never abort the sweep. These once
+    escaped as an AttributeError from .get() and killed the whole run; they
+    must read as "no answer" instead."""
     from web.app.services import suggest
 
-    for content in ("Category: **Food Delivery Services**",  # prose
-                    "null",                                   # valid JSON, not an object
-                    "[]",                                     # valid JSON, not an object
-                    ""):                                      # empty body
+    for content in ("null",   # valid JSON, not an object
+                    "[]",     # valid JSON, not an object
+                    "",       # empty body
+                    "Category: **Food Delivery Services**",  # names nothing real
+                    "I would put this under Delivery or maybe Renta"):  # ambiguous
         monkeypatch.setattr(suggest.requests, "post",
                             lambda *a, _c=content, **k: _RawResponse(_c))
-        assert suggest.suggest_category("X", ["A"], url="u", model="m") is None
+        assert suggest.suggest_category(
+            "X", ["Delivery", "Renta"], url="u", model="m") is None
+
+
+def test_suggest_category_accepts_an_unwrapped_answer(monkeypatch):
+    """Every Ollama *cloud* model measured (gemma4:cloud, gpt-oss:20b-cloud,
+    gpt-oss:120b-cloud) ignores the `format` schema and replies with the bare
+    category name — the correct one, just not wrapped in the JSON object. The
+    strict json.loads path used to discard those as "no answer", which is what
+    made cloud models unusable here."""
+    from web.app.services import suggest
+
+    cats = ["Suscripciones", "Combustible"]
+    for content, expected in (
+            ("Suscripciones", "Suscripciones"),            # the real cloud reply
+            ("suscripciones", "Suscripciones"),            # model's own casing
+            ("**Combustible**", "Combustible"),            # markdown decoration
+            ('"Suscripciones"', "Suscripciones"),          # a quoted JSON string
+            ('```json\n{"category": "Combustible"}\n```', "Combustible"),  # fenced
+            ('Sure! {"category": "Combustible"}', "Combustible"),  # JSON in prose
+            ("The category is Combustible.", "Combustible"),       # plain prose
+            ("Ninguna", None),                             # longhand abstain
+    ):
+        monkeypatch.setattr(suggest.requests, "post",
+                            lambda *a, _c=content, **k: _RawResponse(_c))
+        assert suggest.suggest_category(
+            "X", cats, url="u", model="m") == expected, content
 
 
 # ---- sweep ----

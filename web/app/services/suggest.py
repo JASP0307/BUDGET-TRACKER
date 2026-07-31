@@ -7,16 +7,24 @@ uncategorized merchant and stores the answer as a CategorySuggestion row. The
 dashboard renders it as "Sugerido: X" with accept/dismiss; accepting also mints
 a Rule so the same merchant never needs the LLM again.
 
-The model runs locally (old-laptop CPU, seconds per call), which is why this is
-a batch job and never part of the ingestion webhook. Everything here is best
-effort: an unreachable Ollama, a timeout, or a garbage answer just means no
-suggestion — mirroring notify.py's "must never break the pipeline" stance.
+The model is reached over Ollama's HTTP API and takes seconds per call, which
+is why this is a batch job and never part of the ingestion webhook. Everything
+here is best effort: an unreachable Ollama, a timeout, or a garbage answer just
+means no suggestion — mirroring notify.py's "must never break the pipeline"
+stance.
+
+Both locally-run and Ollama Cloud models work. They need different handling:
+only local models honour the `format` JSON schema, so the reply is parsed
+defensively (see _parse_answer) and the expected shape is stated in the prompt
+as well. Note that a cloud model sends merchant names off the box, which is a
+privacy trade-off the deployment — not this module — decides.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -69,8 +77,98 @@ _SYSTEM_PROMPT = (
     "  \"SUPERMERCADO NACIONAL\" -> \"Supermercado\"   (a grocery store)\n"
     "  \"NETFLIX.COM\" -> \"Suscripciones\"   (a streaming subscription)\n"
     "  \"ALTICE PAGO\" -> \"Teléfono\"   (a phone carrier)\n"
-    "  \"INVERSIONES DELTA SRL\" -> null   (unknown line of business)"
+    "  \"INVERSIONES DELTA SRL\" -> null   (unknown line of business)\n\n"
+    # Only locally-run models honour Ollama's `format` grammar; every cloud
+    # model ignores it (see _parse_answer). Stating the shape in the prompt is
+    # what makes them comply — the constrained path ignores this paragraph
+    # because the grammar already forces the same shape.
+    "Reply with JSON only — no preamble, no explanation, no code fence — in "
+    "exactly this shape:\n"
+    "  {\"category\": \"<one name copied exactly from the list>\"}\n"
+    "  {\"category\": null}   (when unsure)"
 )
+
+# Anything that means "no answer" when a model writes it out longhand.
+_NULLISH = {"null", "none", "n/a", "na", "unknown", "nulo", "ninguna",
+            "ninguno", "desconocido", ""}
+
+# A model told to answer with just a name still sometimes announces it first.
+# Stripping a known lead-in and re-testing for an *exact* match is deliberate:
+# scanning for a category name anywhere in the reply looks tempting but is a
+# false-positive machine — with a "Delivery" category, "Food Delivery Services"
+# substring-matches and would be recorded as a confident answer.
+_LEAD_IN = re.compile(
+    r"^(?:the\s+)?(?:category|answer|respuesta|categor[ií]a)\s*(?:is|es|:|=)\s*",
+    re.IGNORECASE)
+
+
+def _resolve(name, categories: list[str]) -> str | None:
+    """Map whatever the model called the category onto the user's own spelling.
+
+    Matching is case-insensitive because an unconstrained model rarely copies
+    the list verbatim ("suscripciones" for "Suscripciones"). Only a name that
+    is really in `categories` can come out of here; anything else is None,
+    because the prompt's own rule is that wrong is worse than null.
+    """
+    if not isinstance(name, str):
+        return None
+    by_lower = {c.lower(): c for c in categories}
+
+    def clean(text: str) -> str:
+        # Models like to decorate: **Combustible**, "Combustible", `Combustible`.
+        return text.strip().strip("*`\"'. \n\t")
+
+    cleaned = clean(name)
+    if cleaned.lower() in _NULLISH:
+        return None
+    if cleaned.lower() in by_lower:
+        return by_lower[cleaned.lower()]
+    stripped = clean(_LEAD_IN.sub("", cleaned, count=1))
+    if stripped != cleaned:
+        if stripped.lower() in _NULLISH:
+            return None
+        return by_lower.get(stripped.lower())
+    return None
+
+
+def _parse_answer(content: str, categories: list[str]) -> str | None:
+    """Pull a category out of whatever the backend actually replied.
+
+    Ollama's `format` JSON schema is honoured only by **locally-run** models.
+    Every cloud model measured (gemma4:cloud, gpt-oss:20b-cloud,
+    gpt-oss:120b-cloud, 2026-07-30) ignores it and answers with the bare
+    category name — the right one, just unwrapped — which the old strict
+    json.loads path threw away as "no answer". So parse defensively instead:
+    strict JSON when we get it, bare name when we don't.
+    """
+    if not isinstance(content, str):
+        return None
+    text = content.strip()
+    # ```json ... ``` fences.
+    fence = re.match(r"^```(?:json)?\s*(.*?)\s*```$", text, re.DOTALL | re.IGNORECASE)
+    if fence:
+        text = fence.group(1).strip()
+    if not text:
+        return None
+
+    candidates = [text]
+    # JSON embedded in a sentence: "Sure! {"category": "Renta"}".
+    embedded = re.search(r"\{.*\}", text, re.DOTALL)
+    if embedded and embedded.group(0) != text:
+        candidates.insert(0, embedded.group(0))
+
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+        except ValueError:
+            continue
+        if isinstance(parsed, dict):
+            return _resolve(parsed.get("category"), categories)
+        # A model told to answer in JSON may just emit a quoted string, or a
+        # bare `null` that parses to None.
+        return _resolve(parsed, categories)
+    # Not JSON at all — the cloud-model case: treat the reply as the name.
+    return _resolve(text, categories)
 
 
 def _schema(categories: list[str]) -> dict:
@@ -110,19 +208,13 @@ def suggest_category(merchant: str, categories: list[str], *,
             timeout=OLLAMA_TIMEOUT,
         )
         resp.raise_for_status()
-        answer = json.loads(resp.json()["message"]["content"])
+        content = resp.json()["message"]["content"]
     except (requests.RequestException, KeyError, ValueError, TypeError):
         log.warning("ollama call failed for merchant %r", merchant, exc_info=True)
         return None
-    # Not every backend honours `format`: Ollama's cloud-hosted models answer in
-    # prose, and a model can also emit a bare `null`, which parses to None. Both
-    # once escaped as an AttributeError from .get() and killed the whole sweep,
-    # so treat anything that isn't a JSON object as "no answer".
-    if not isinstance(answer, dict):
-        return None
-    name = answer.get("category")
-    # Belt and braces on top of the schema enum: only a real category counts.
-    return name if name in categories else None
+    # Belt and braces on top of the schema enum: _parse_answer only ever
+    # returns a name that is really in `categories`, whatever the model said.
+    return _parse_answer(content, categories)
 
 
 def _uncategorized_txns(session: Session, *, limit: int,
