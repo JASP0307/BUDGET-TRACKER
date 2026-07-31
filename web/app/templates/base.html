@@ -90,7 +90,7 @@
   .brand-text { white-space: nowrap; }
 
   /* ---- mobile drawer ----
-     Seven Spanish nav labels plus the account email never fit a phone. Below
+     Eight Spanish nav labels plus the account email never fit a phone. Below
      $drawer-bp the nav and user menu slide out from the left instead; above it
      `display: contents` dissolves the wrapper so the bar lays out exactly as
      it always did. Only rendered for signed-in users (`header.has-nav`) — the
@@ -698,6 +698,7 @@
     <a href="/rules" {% if request.url.path == "/rules" %}aria-current="page"{% endif %}>{{ t('Reglas') }}</a>
     <a href="/categories" {% if request.url.path == "/categories" %}aria-current="page"{% endif %}>{{ t('Categorías') }}</a>
     <a href="/setup" {% if request.url.path == "/setup" %}aria-current="page"{% endif %}>{{ t('Conectar') }}</a>
+    <a href="/notifications" {% if request.url.path == "/notifications" %}aria-current="page"{% endif %}>{{ t('Notificaciones') }}</a>
     <a href="/account" {% if request.url.path == "/account" %}aria-current="page"{% endif %}>{{ t('Cuenta') }}</a>
     {% if request.state.is_admin %}
     <a href="/admin" {% if request.url.path.startswith("/admin") %}aria-current="page"{% endif %}>Admin</a>

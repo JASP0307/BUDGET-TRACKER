@@ -281,9 +281,11 @@ _EN = {
     "Ver mi presupuesto": "See my budget",
     "En cuanto llegue tu primera transacción, aparecerá aquí.":
         "As soon as your first transaction arrives, it will appear here.",
-    "¿Quieres un aviso al instante en cada compra?":
-        "Want an instant alert on every purchase?",
-    "Activa las alertas por Telegram": "Enable Telegram alerts",
+    # Names both channels because they behave differently: Telegram fires per
+    # transaction, email only when a category crosses its threshold.
+    "¿Quieres un aviso al instante en cada compra, o un correo solo cuando te pases del presupuesto?":
+        "Want an instant alert on every purchase, or an email only when you go over budget?",
+    "Configura tus alertas": "Set up your alerts",
     "No se pudo generar tu dirección de ingesta. Recarga la página o contacta soporte.":
         "We couldn't generate your intake address. Reload the page or contact support.",
 
