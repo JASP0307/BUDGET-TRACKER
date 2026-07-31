@@ -79,3 +79,20 @@ def send_password_reset_email(to: str, reset_url: str) -> None:
         "El enlace vence en 1 hora. Si no lo solicitaste, ignora este mensaje; "
         "tu contraseña seguirá igual.",
     )
+
+
+def send_budget_alert_email(to: str, category_name: str, spent: float,
+                            budget: float) -> None:
+    pct = spent / budget * 100
+    remaining = budget - spent
+    status = (f"Presupuesto excedido por RD${-remaining:,.2f}." if remaining < 0
+              else f"Te quedan RD${remaining:,.2f}.")
+    send_email(
+        to,
+        f"Presupuesto: {category_name} al {pct:.0f}%",
+        f"La categoría «{category_name}» llegó al {pct:.0f}% de su "
+        f"presupuesto este mes.\n\n"
+        f"Gastado: RD${spent:,.2f} de RD${budget:,.2f}\n"
+        f"{status}\n\n"
+        "Ajusta el aviso de esta categoría desde /notifications.",
+    )

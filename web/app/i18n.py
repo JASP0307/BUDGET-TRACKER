@@ -182,6 +182,10 @@ _EN = {
     "Iniciar": "Start",
     "Quedarás conectado automáticamente.": "You'll be connected automatically.",
     "Conectar Telegram": "Connect Telegram",
+    "Un aviso cuando una categoría llega a su umbral de presupuesto — no por cada compra.":
+        "One alert when a category hits its budget threshold — not one per purchase.",
+    "Umbral por categoría (% del presupuesto mensual). 100% = solo al excederlo.":
+        "Per-category threshold (% of the monthly budget). 100% = only once exceeded.",
     "El enlace es personal y vence en 15 minutos. Si expira, recarga esta página.":
         "The link is personal and expires in 15 minutes. If it expires, reload this page.",
 

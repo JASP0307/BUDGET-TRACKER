@@ -243,6 +243,28 @@ class NotificationPref(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
-    channel: Mapped[str] = mapped_column(String(16))  # telegram | webpush
+    channel: Mapped[str] = mapped_column(String(16))  # telegram | email | webpush
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     telegram_chat_id: Mapped[str | None] = mapped_column(String(32))
+
+
+class CategoryAlertPref(Base):
+    """Per-category email-alert threshold, as a percent of that category's
+    monthly budget. A category with no row here uses the default (alert only
+    once spend reaches 100% — i.e. the budget is exceeded); this table only
+    holds the categories a user has explicitly customized or turned off.
+
+    A separate table (not columns on NotificationPref or Budget) for the usual
+    reason: `create_all` creates missing tables but never adds columns to an
+    existing one, and there is no Alembic. It also can't live on Budget, which
+    is scoped per month — this preference is a standing one.
+    """
+
+    __tablename__ = "category_alert_prefs"
+    __table_args__ = (UniqueConstraint("user_id", "category_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    category_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("categories.id"))
+    threshold_pct: Mapped[float] = mapped_column(Float, default=100.0)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
