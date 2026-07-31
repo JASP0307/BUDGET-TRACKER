@@ -9,6 +9,10 @@ token.json
 state.json
 *.log
 
+# Hand-labelled cases for scripts/bench_suggest.py. Real merchant names — and
+# the repo is public — so they stay on the box that has the data.
+bench-cases.local.json
+
 # Python
 .venv/
 venv/
