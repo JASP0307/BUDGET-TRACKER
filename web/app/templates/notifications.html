@@ -49,5 +49,48 @@
       {{ t('El enlace es personal y vence en 15 minutos. Si expira, recarga esta página.') }}</p>
     {% endif %}
   </section>
+
+  <section class="card">
+    <div class="notif-head">
+      <div class="notif-title">
+        <span class="tg-mark" aria-hidden="true">✉</span>
+        <div>
+          <h2>{{ t('Correo') }}</h2>
+          <p class="muted">{{ t('Un aviso cuando una categoría llega a su umbral de presupuesto — no por cada compra.') }}</p>
+        </div>
+      </div>
+    </div>
+
+    <form class="toggle-row" method="post" action="/notifications/email/toggle">
+      <label class="switch">
+        <input type="checkbox" name="enabled" {{ "checked" if email_enabled }}
+               onchange="this.form.submit()">
+        <span class="track"></span>
+      </label>
+      <span>{{ t('Alertas') }} {{ t('activadas') if email_enabled else t('pausadas') }}</span>
+    </form>
+
+    {% if email_enabled %}
+    <form method="post" action="/notifications/email/thresholds" style="margin-top:1rem">
+      <p class="muted" style="margin-top:0">{{ t('Umbral por categoría (% del presupuesto mensual). 100% = solo al excederlo.') }}</p>
+      <ul class="cats">
+        {% for r in category_rows %}
+        <li class="cat" style="padding:.4rem .7rem">
+          <div class="cat-line">
+            <label class="cat-name" for="threshold_{{ r.category.id }}">
+              <input type="checkbox" name="enabled_{{ r.category.id }}" {{ "checked" if r.cat_enabled }}>
+              {{ r.category.name }}
+            </label>
+            <input class="amount" type="number" inputmode="numeric" step="1" min="0" max="1000"
+                   id="threshold_{{ r.category.id }}" name="threshold_{{ r.category.id }}"
+                   value="{{ "%.0f" | format(r.threshold) }}">%
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+      <p><button type="submit">{{ t('Guardar cambios') }}</button></p>
+    </form>
+    {% endif %}
+  </section>
 </div>
 {% endblock %}

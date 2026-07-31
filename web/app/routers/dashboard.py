@@ -535,7 +535,10 @@ def _notify_added(session: Session, user_id, core: CoreTxn,
     try:
         spent, budget = month_spend_and_budget(
             session, user_id, category.id if category else None, core.txn_date)
-        notify.transaction_alert(session, user_id, core, spent, budget)
+        notify.transaction_alert(
+            session, user_id, core, spent, budget,
+            category_id=category.id if category else None,
+            category_name=category.name if category else None)
     except Exception:  # noqa: BLE001
         log.exception("manual transaction alert failed for user %s", user_id)
 

@@ -280,7 +280,10 @@ def _ingest_transaction(session: Session, raw: RawEmail, from_addr: str,
             spent, budget = month_spend_and_budget(
                 session, raw.user_id, category.id if category else None,
                 txn.txn_date)
-            notify.transaction_alert(session, raw.user_id, txn, spent, budget)
+            notify.transaction_alert(
+                session, raw.user_id, txn, spent, budget,
+                category_id=category.id if category else None,
+                category_name=category.name if category else None)
         except Exception:  # noqa: BLE001
             log.exception("notification failed for raw_email %s", raw.id)
     return "processed", ""
