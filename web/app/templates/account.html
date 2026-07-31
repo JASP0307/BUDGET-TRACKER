@@ -6,11 +6,37 @@
   <p class="lede">{{ t('Tus datos son tuyos. Descárgalos o bórralos cuando quieras, sin pedirnos permiso.') }}</p>
 
   {% if error %}<p class="alert err">{{ error }}</p>{% endif %}
+  {% if notice %}<p class="alert ok">{{ notice }}</p>{% endif %}
 
   <section class="card">
     <h2 class="section-title">{{ t('Descargar mis datos') }}</h2>
     <p class="muted">{{ t('Un archivo JSON con todas tus transacciones, categorías, reglas y presupuestos.') }}</p>
     <a class="cta-btn" href="/account/export">{{ t('Descargar JSON') }}</a>
+  </section>
+
+  <section class="card">
+    <h2 class="section-title">{{ t('Correos que pueden reenviarte') }}</h2>
+    <p class="muted">{{ t('Solo aceptamos correos reenviados desde estas direcciones. Si reenvías desde otra, lo ignoramos — así nadie más puede meter consumos en tu cuenta.') }}</p>
+    <ul class="plain-list">
+      <li><strong>{{ user_email }}</strong> <span class="muted">({{ t('tu cuenta') }})</span></li>
+      {% for f in forwarders %}
+      <li>
+        {{ f.address }}
+        <form method="post" action="/account/forwarders/remove" class="inline-form">
+          <input type="hidden" name="address" value="{{ f.address }}">
+          <button class="link-btn" type="submit">{{ t('Quitar') }}</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    <form method="post" action="/account/forwarders/add">
+      <div class="field">
+        <label for="fwd-addr">{{ t('Agregar otro correo') }}</label>
+        <input id="fwd-addr" type="email" name="address" autocomplete="email"
+               placeholder="otro@gmail.com" required>
+      </div>
+      <button class="cta-btn" type="submit">{{ t('Agregar') }}</button>
+    </form>
   </section>
 
   <section class="card">

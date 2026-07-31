@@ -352,3 +352,33 @@ def test_redelivery_of_the_same_email_is_idempotent(client, monkeypatch):
         rows = s.scalars(select(RawEmail).where(
             RawEmail.provider_message_id == "re-abc-123")).all()
         assert len(rows) == 1
+
+
+def test_forward_from_an_unverified_mailbox_is_rejected(client, monkeypatch):
+    """The trust gate has to work through the adapter too, on lower-cased
+    headers. Resend's SRS Return-Path is the only place the forwarding mailbox
+    appears on auto-forwarded mail, so if the adapter dropped or re-cased it,
+    a stranger's forward would sail through here while being blocked on the
+    Postmark path."""
+    from web.app.db import get_sessionmaker
+    from web.app.models import RawEmail, Transaction
+
+    token = _own_token(client)
+    stranger = "juanab0307@gmail.com"
+    detail = _detail(token, to=[stranger], headers={
+        "delivered-to": stranger,
+        "x-forwarded-to": f"u_{token}@in.example.do",
+        "return-path": f"<juanab0307+caf_=u_{token}=in.example.do@gmail.com>",
+    })
+    monkeypatch.setenv("BUDGET_RESEND_WEBHOOK_SECRET", SECRET)
+    monkeypatch.setattr(inbound_resend, "fetch_email", lambda _id: detail)
+
+    r = _post(client, {"type": "email.received", "data": {"email_id": "re-abc-123"}})
+    assert r.status_code == 200
+
+    with get_sessionmaker()() as s:
+        raw = s.scalar(select(RawEmail).where(
+            RawEmail.provider_message_id == "re-abc-123"))
+        assert raw.processing_status == "rejected"
+        assert stranger in raw.note
+        assert s.scalars(select(Transaction)).all() == []

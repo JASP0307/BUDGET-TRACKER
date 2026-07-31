@@ -355,6 +355,18 @@
     color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, transparent);
     background: color-mix(in srgb, var(--bad) 8%, transparent);
   }
+  .alert.ok {
+    color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent);
+    background: color-mix(in srgb, var(--good) 8%, transparent);
+  }
+  /* A destructive action that belongs inline in a list, not as its own block. */
+  .inline-form { display: inline; }
+  .link-btn {
+    background: none; border: 0; padding: 0; margin-left: .4rem;
+    font: inherit; font-size: .85rem; color: var(--muted);
+    text-decoration: underline; cursor: pointer;
+  }
+  .link-btn:hover { color: var(--bad); }
   .user-menu {
     display: flex; align-items: center; gap: .6rem;
   }

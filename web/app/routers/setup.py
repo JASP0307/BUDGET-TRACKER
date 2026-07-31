@@ -162,6 +162,26 @@ def _confirmation_state(session, user_id, own_email: str) -> tuple[list[dict], s
     return [], _mask_email(mismatch) if mismatch else None
 
 
+def _rejected_forwards(session, user_id) -> list[str]:
+    """Mailboxes whose forwards we refused for this account, newest first.
+
+    A rejected forward is otherwise invisible: it produces no transaction and no
+    error anyone sees. Surfacing the sending address turns the common case — the
+    user forwarded from a second mailbox they never registered — into something
+    they can fix, instead of mail that silently disappears.
+    """
+    rows = session.scalars(
+        select(RawEmail).where(RawEmail.user_id == user_id,
+                               RawEmail.processing_status == "rejected")
+        .order_by(RawEmail.received_at.desc()).limit(20)).all()
+    seen: list[str] = []
+    for raw in rows:
+        m = re.search(r"forwarded by ([^,]+),", raw.note or "")
+        if m and m.group(1) not in seen:
+            seen.append(m.group(1))
+    return seen
+
+
 @router.get("/setup")
 def setup_page(request: Request, user: User = Depends(current_user)):
     with get_sessionmaker()() as session:
@@ -184,6 +204,7 @@ def setup_page(request: Request, user: User = Depends(current_user)):
             "confirmations": confirmations,
             "mismatch_source": mismatch,
             "own_email": user.email,
+            "rejected_forwards": _rejected_forwards(session, user.id),
             "tx_count": tx_count,
         })
 

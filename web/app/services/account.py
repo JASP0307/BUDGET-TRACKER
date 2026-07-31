@@ -16,7 +16,8 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from ..models import (Budget, Card, Category, InboundAddress,
-                      NotificationPref, RawEmail, Rule, Transaction, User)
+                      NotificationPref, RawEmail, Rule, Transaction, User,
+                      VerifiedForwarder)
 
 
 def export_data(session: Session, user: User) -> dict:
@@ -34,6 +35,8 @@ def export_data(session: Session, user: User) -> dict:
         InboundAddress.user_id == user.id)).all()
     prefs = session.scalars(select(NotificationPref).where(
         NotificationPref.user_id == user.id)).all()
+    forwarders = session.scalars(select(VerifiedForwarder).where(
+        VerifiedForwarder.user_id == user.id)).all()
 
     transactions = session.scalars(
         select(Transaction).where(Transaction.user_id == user.id)
@@ -54,6 +57,7 @@ def export_data(session: Session, user: User) -> dict:
             "timezone": user.timezone,
             "locale": user.locale,
             "forwarding_addresses": [a.token for a in inbound if a.active],
+            "verified_forwarders": [f.address for f in forwarders],
         },
         "cards": [{"bank": c.bank, "last4": c.last4, "label": c.label,
                    "active": c.active} for c in cards.values()],
@@ -91,7 +95,7 @@ def delete_account(session: Session, user: User) -> None:
     """
     user_id = user.id
     for model in (Transaction, Rule, Budget, NotificationPref, RawEmail,
-                  Card, Category, InboundAddress):
+                  Card, Category, InboundAddress, VerifiedForwarder):
         session.execute(delete(model).where(model.user_id == user_id))
     session.execute(delete(User).where(User.id == user_id))
     session.commit()

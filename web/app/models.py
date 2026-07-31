@@ -54,6 +54,34 @@ class InboundAddress(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
+class VerifiedForwarder(Base):
+    """A mailbox allowed to forward mail into this account's inbound address.
+
+    Routing alone decides *which* account a message lands on, and it routes on a
+    token anyone could learn or guess — so without this, knowing someone's
+    `u_<token>@` address is enough to write transactions into their budget. That
+    is not hypothetical: a backfill forwarded from a second Gmail to the wrong
+    inbound address filed ten transactions onto another account (2026-07-26).
+
+    The owner's own `users.email` is always trusted and is not stored here, so
+    existing accounts keep working with an empty table. Rows are the *extra*
+    mailboxes a user forwards from — a second Gmail, a work address.
+
+    A separate table rather than a column on `users` on purpose: `create_all`
+    creates missing tables but never adds columns to an existing one, so this
+    deploys without Alembic. Same reasoning as CategorySuggestion below.
+    """
+
+    __tablename__ = "verified_forwarders"
+    __table_args__ = (UniqueConstraint("user_id", "address"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    address: Mapped[str] = mapped_column(String(320))  # stored lowercased
+    verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),
+                                                  default=_now)
+
+
 class Card(Base):
     __tablename__ = "cards"
     __table_args__ = (UniqueConstraint("user_id", "bank", "last4"),)
@@ -89,6 +117,7 @@ class RawEmail(Base):
     headers: Mapped[dict] = mapped_column(JSON, default=dict)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     # pending | processed | skipped | unrecognized | confirmation | failed
+    # | backfilled | rejected (forwarded by an unverified mailbox)
     processing_status: Mapped[str] = mapped_column(String(16), default="pending")
     note: Mapped[str] = mapped_column(Text, default="")  # error text, skip reason, Gmail code
 

@@ -34,7 +34,7 @@ from budgetcore.parsers import parse_email
 
 from .. import crypto
 from ..models import (Budget, Card, Category, FxRate, InboundAddress,
-                      RawEmail, Rule, Transaction)
+                      RawEmail, Rule, Transaction, User, VerifiedForwarder)
 from . import notify
 
 log = logging.getLogger("ingest")
@@ -65,6 +65,15 @@ _TOKEN_ANYWHERE_RE = re.compile(r"(?:^|[+=<\s])u_([a-z0-9]{6,32})(?=[@=+>\s]|$)"
 _ROUTING_HEADERS = frozenset({"x-forwarded-to", "delivered-to", "return-path",
                               "x-original-to"})
 _GMAIL_CODE_RE = re.compile(r"\b(\d{9})\b")  # legacy numeric confirmation code
+# Gmail's SRS rewrite of Return-Path on auto-forwarded mail:
+#   <jabner0703+caf_=<pmhash>+u_<token>=inbound.postmarkapp.com@gmail.com>
+# Everything before "+caf_=" plus the domain is the *forwarding* account, which
+# is the only place auto-forwarded mail names it — From is the bank.
+_SRS_RETURN_PATH_RE = re.compile(
+    r"<?([\w.\-]+)\+caf_=[^@\s>]*@([\w.\-]+\.\w+)>?", re.IGNORECASE)
+_ANY_ADDR_RE = re.compile(r"[\w.+\-]+@[\w.\-]+\.\w+")
+# Headers naming the mailbox that performed the forward, most explicit first.
+_FORWARDER_HEADERS = ("return-path", "x-forwarded-for")
 # Modern Gmail forwarding-confirmation "click to confirm" link (vf- = verify).
 _GMAIL_CONFIRM_LINK_RE = re.compile(
     r"https://mail(?:-settings)?\.google\.com/mail/vf-[^\s\"'<>]+")
@@ -149,19 +158,13 @@ def _process(session: Session, raw: RawEmail, payload: dict) -> None:
     raw.inbound_address_id = address.id
     raw.user_id = address.user_id
 
-    # 1b. Backfill: a "Forward as attachment" batch carries the original bank
-    # emails as message/rfc822 attachments. Process each; the outer forwarding
-    # message (From = the user's own Gmail) is not itself a transaction.
-    attachments = _eml_attachments(payload)
-    if attachments:
-        _process_attachments(session, raw, attachments)
-        return
-
     sender = raw.from_addr.lower()
 
     # 2. Gmail's forwarding-confirmation — surface it for onboarding. Modern
     # Gmail sends a "click to confirm" link (vf-) and no numeric code, so prefer
     # the link; fall back to the legacy 9-digit code if that's all there is.
+    # Checked before the trust gate below: this one legitimately arrives from
+    # Google rather than the user's mailbox, and rejecting it breaks onboarding.
     if GMAIL_CONFIRMATION_SENDER in sender:
         raw.processing_status = "confirmation"
         body = crypto.decrypt(raw.html_body)
@@ -173,6 +176,36 @@ def _process(session: Session, raw: RawEmail, payload: dict) -> None:
             raw.note = code.group(1)
         else:
             raw.note = "confirmation email (no code or link found)"
+        return
+
+    # 2b. Trust gate: routing put this message on an account purely on a token
+    # anyone could learn, so require the forwarding mailbox to belong to that
+    # account. Placed before the attachment branch so a misdirected backfill is
+    # rejected whole rather than attachment by attachment.
+    forwarder = _forwarding_account(payload, raw.from_addr)
+    if forwarder is not None:
+        trusted = _trusted_forwarders(session, raw.user_id)
+        if forwarder not in trusted:
+            log.warning("rejected raw_email %s: forwarded by %s, not verified "
+                        "for user %s", raw.id, forwarder, raw.user_id)
+            raw.processing_status = "rejected"
+            raw.note = (f"forwarded by {forwarder}, not a verified sender for "
+                        "this account")
+            return
+    else:
+        # Deliberately lenient. Over-strict delivery-header logic silently broke
+        # live ingestion for days (see TASKS.md); an unidentifiable forwarder
+        # must not repeat that. The spoofed-From vector this leaves open is the
+        # DMARC/SPF follow-up, not something this gate claims to close.
+        log.warning("raw_email %s: could not identify a forwarding mailbox; "
+                    "ingesting anyway", raw.id)
+
+    # 2c. Backfill: a "Forward as attachment" batch carries the original bank
+    # emails as message/rfc822 attachments. Process each; the outer forwarding
+    # message (From = the user's own Gmail) is not itself a transaction.
+    attachments = _eml_attachments(payload)
+    if attachments:
+        _process_attachments(session, raw, attachments)
         return
 
     # 3-8. Parse → card → categorize → dedupe → persist → notify.
@@ -251,6 +284,80 @@ def _ingest_transaction(session: Session, raw: RawEmail, from_addr: str,
         except Exception:  # noqa: BLE001
             log.exception("notification failed for raw_email %s", raw.id)
     return "processed", ""
+
+
+def _header_values(payload: dict, name: str) -> list[str]:
+    """Every value of a header, matched case-insensitively and list-tolerantly.
+
+    Same two reasons as ``_ROUTING_HEADERS``: providers disagree on header case
+    (Postmark canonical, Resend lower), and a re-forwarded message repeats a
+    header, which some providers hand over as a list.
+    """
+    out: list[str] = []
+    for header in payload.get("Headers", []) or []:
+        if not isinstance(header, dict):
+            continue
+        if str(header.get("Name") or "").lower() != name:
+            continue
+        value = header.get("Value")
+        values = value if isinstance(value, (list, tuple)) else [value]
+        out.extend(str(v).strip() for v in values if str(v or "").strip())
+    return out
+
+
+def _forwarding_account(payload: dict, from_addr: str) -> str | None:
+    """The mailbox that forwarded this message to us, lowercased, or None.
+
+    Two shapes, because the two ways a user can feed us mail put the forwarder
+    in different places:
+
+    - **Gmail auto-forward** — ``From`` is the bank addressing the user, so the
+      forwarder appears only in Gmail's SRS ``Return-Path`` rewrite, or as the
+      first address of ``X-Forwarded-For: <source> <dest>``.
+    - **Manual forward / "forward as attachment"** — the user composed the
+      message, so ``From`` *is* their mailbox. This is the fallback.
+
+    A bank's own address never counts as a forwarder: on auto-forwarded mail the
+    bank owns both From and (unless Gmail rewrote it) Return-Path, so treating it
+    as the forwarder would reject every real bank notification. The SRS match is
+    exempt — it is unambiguously Gmail forwarding on someone's behalf.
+
+    Returns None when nothing resolves; the caller treats that as "can't tell"
+    and lets the message through rather than risk silently dropping real mail.
+    """
+    for header in _FORWARDER_HEADERS:
+        for value in _header_values(payload, header):
+            srs = _SRS_RETURN_PATH_RE.search(value)
+            if srs:
+                return f"{srs.group(1)}@{srs.group(2)}".lower()
+            addr = _ANY_ADDR_RE.search(value)
+            if addr and not _is_bank_address(addr.group(0)):
+                return addr.group(0).lower()
+    addr = _ANY_ADDR_RE.search(from_addr or "")
+    if addr and not _is_bank_address(addr.group(0)):
+        return addr.group(0).lower()
+    return None
+
+
+def _is_bank_address(address: str) -> bool:
+    lowered = (address or "").lower()
+    return any(d in lowered for d in KNOWN_BANK_DOMAINS)
+
+
+def _trusted_forwarders(session: Session, user_id) -> set[str]:
+    """Mailboxes allowed to forward into this account: the owner's registered
+    email (always, so accounts predating the table keep working) plus any extra
+    addresses they added in settings."""
+    trusted = set()
+    user = session.get(User, user_id)
+    if user is not None and user.email:
+        trusted.add(user.email.strip().lower())
+    trusted.update(
+        row.address.strip().lower() for row in session.scalars(
+            select(VerifiedForwarder).where(
+                VerifiedForwarder.user_id == user_id)).all()
+        if row.address)
+    return trusted
 
 
 def _eml_attachments(payload: dict) -> list[dict]:
