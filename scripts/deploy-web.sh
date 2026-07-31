@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-command deploy for the web app on the always-on box (the Lenovo).
 #
-#   scripts/deploy-web.sh
+#   scripts/deploy-web.sh [--no-pull]
 #
 # Pulls the latest code, then restarts uvicorn so the new code actually takes
 # effect. This uvicorn runs plain (no --reload), so a bare `git pull` alone
@@ -15,6 +15,12 @@
 # is the explicit path and disables that hook for its own pull to avoid a double
 # restart.
 #
+# --no-pull restarts without pulling. The post-merge hook uses it and does
+# nothing else: the hook used to carry a *second* copy of the restart logic, so
+# when the stop sequence learned to wait for the lock (below) the hook kept the
+# old port-only wait and a bare `git pull` could still take the site down. One
+# implementation, two entry points. Install the hook with scripts/install-hooks.sh.
+#
 # Stopping waits for the *lock* as well as the port. Those clear at different
 # moments: the port is released by uvicorn, the lock by the `flock` parent that
 # outlives it by a beat. On 2026-07-31 a deploy killed the old process, saw the
@@ -23,6 +29,14 @@
 # an empty log and a health check that only said "000". Waiting on both, and
 # naming the two ways a start can fail, is the fix.
 set -uo pipefail
+
+PULL=true
+case "${1:-}" in
+  --no-pull) PULL=false ;;
+  "") ;;
+  *) echo "usage: $(basename "$0") [--no-pull]" >&2; exit 2 ;;
+esac
+
 cd "$(dirname "$0")/.."
 REPO="$PWD"
 ENVF="${WEB_ENV_FILE:-$HOME/.config/budget-web.env}"
@@ -39,9 +53,11 @@ pids_on_port() { ss -ltnp "sport = :$PORT" 2>/dev/null | grep -oP 'pid=\K[0-9]+'
 # Succeeds only if nothing holds the lock: takes it, runs true, releases it.
 lock_free() { /usr/bin/flock -n "$LOCK" true 2>/dev/null; }
 
-echo "==> git pull --ff-only"
-# Skip hooks here; this script owns the single authoritative restart below.
-git -c core.hooksPath=/dev/null pull --ff-only
+if [ "$PULL" = true ]; then
+  echo "==> git pull --ff-only"
+  # Skip hooks here; this script owns the single authoritative restart below.
+  git -c core.hooksPath=/dev/null pull --ff-only
+fi
 
 echo "==> restarting uvicorn on :$PORT"
 PIDS=$(pids_on_port)
