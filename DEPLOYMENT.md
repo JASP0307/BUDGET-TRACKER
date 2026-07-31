@@ -302,9 +302,45 @@ lack of an https `BUDGET_BASE_URL`.
 
 This is exactly the class of problem Alembic exists to prevent — see TASKS.md.
 
-## Migration to Raspberry Pi (later)
-1. Clone the GitHub repo on the Pi.
+## Migration to a bigger box — Raspberry Pi / Mac mini (later)
+1. Clone the GitHub repo on the new host.
 2. `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`
 3. Copy `config.toml`, `credentials.json`, `token.json` from the laptop (scp).
-4. Install the same crontab line with the Pi's path.
+4. Install the same crontab line with the new host's path.
 5. Confirm a run, then retire the laptop's crontab entry.
+
+### Don't assume a bigger model is better
+
+The reason to move is RAM, so the obvious next step is a bigger model — and on
+this task that has already backfired once: `gemma4:e2b` (7.2 GB) scored *worse*
+than `qwen2.5:3b` (1.9 GB) because it never abstained, guessing "Mantenimiento"
+for every unknown merchant. Most merchants the sweep sees are ones it should
+decline (bank-transfer person names, marketplaces, unfamiliar businesses), and
+a larger model is not automatically better at declining — often the opposite,
+since more capable models are tuned hard to be helpful.
+
+So measure, don't guess. `scripts/bench_suggest.py` is kept for exactly this:
+
+```sh
+PYTHONPATH=core .venv-web/bin/python scripts/bench_suggest.py \
+    --model qwen2.5:3b@http://100.123.55.111:11434 \
+    --model <candidate>@http://127.0.0.1:11434
+```
+
+Ground truth comes from the live DB; should-abstain cases live in a git-ignored
+`bench-cases.local.json` (see the script's docstring) and must be carried over
+with the other secrets in step 3, since they are real merchant names.
+
+Read the three error columns, not just the score: `wrong` (picked the wrong
+category), `invented` (answered where it should have declined) and
+`over-abstained` (declined something knowable) describe very different
+temperaments. Two models tied at 13/17 in the 2026-07-30 run while one invented
+three categories and the other invented none. For this feature, `invented` is
+the expensive column — a wrong suggestion becomes a wrong *rule* the moment
+it's accepted on the dashboard.
+
+Once a model is chosen, set `BUDGET_OLLAMA_MODEL` (and `BUDGET_OLLAMA_URL` if
+inference stops being remote) in `~/.config/budget-web.env`, then re-run the
+sweep with `--dry-run` before letting cron have it. Note that `MISS_TTL_DAYS`
+already re-asks abstained merchants when the model tag changes, so a swap
+reconsiders past misses on its own.
