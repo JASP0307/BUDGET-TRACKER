@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 from budgetcore.banks import bank_domains
 from budgetcore.categorize import UNCATEGORIZED, categorize
 from budgetcore.dedupe import signature
+from budgetcore.models import Bank
 from budgetcore.parsers import parse_email
 
 from .. import crypto
@@ -69,6 +70,12 @@ _GMAIL_CONFIRM_LINK_RE = re.compile(
     r"https://mail(?:-settings)?\.google\.com/mail/vf-[^\s\"'<>]+")
 
 DEFAULT_USD_DOP = 60.0
+
+# The single pseudo-card every user's hand-entered spend hangs off of. The last4
+# is a placeholder — Bank.MANUAL is what identifies it — and both values feed the
+# card's dedupe identity, so neither may change once rows exist.
+MANUAL_LAST4 = "0000"
+MANUAL_CARD_LABEL = "Efectivo / otro"
 
 # Statuses whose body is dropped the moment processing finishes: we got what we
 # needed. Everything else keeps its body for the purge script's timed window —
@@ -210,13 +217,9 @@ def _ingest_transaction(session: Session, raw: RawEmail, from_addr: str,
     category = session.scalar(select(Category).where(
         Category.user_id == raw.user_id, Category.name == txn.category))
 
-    # 7. Content dedupe. Key on the card's STABLE identity (bank+last4), not its
-    # display label — a user relabeling a card must not make the same charge look
-    # new and double-count it. This also collapses a backfilled charge against
-    # its live-forwarded twin (and vice-versa), since the key is content-based.
-    card_key = f"{card.bank}:{card.last4}"
-    key = "|".join(str(p) for p in signature(
-        card_key, txn.txn_date, txn.merchant, txn.signed_amount()))
+    # 7. Content dedupe — collapses a backfilled charge against its
+    # live-forwarded twin (and vice-versa), since the key is content-based.
+    key = dedupe_key_for(card, txn.txn_date, txn.merchant, txn.signed_amount())
     duplicate = session.scalar(select(Transaction).where(
         Transaction.user_id == raw.user_id, Transaction.dedupe_key == key))
     if duplicate is not None:
@@ -399,6 +402,38 @@ def _get_or_create_card(session: Session, user_id, bank: str, last4: str) -> Car
         session.add(card)
         session.flush()
     return card
+
+
+def get_or_create_manual_card(session: Session, user_id) -> Card:
+    """The "Efectivo / otro" bucket a hand-entered transaction lands on when no
+    real card is behind it — cash, or a transfer from an account the app never
+    sees mail for. Transaction.card_id is NOT NULL, so a pseudo-card is how
+    "no card" is represented without a migration.
+
+    The label is stored in Spanish at creation (like the system categories)
+    rather than translated at render time, which keeps Card.display free of
+    i18n and lets the user rename it.
+    """
+    card = _get_or_create_card(session, user_id, Bank.MANUAL.value, MANUAL_LAST4)
+    if card.needs_review:  # freshly created — it is not a card to review
+        card.needs_review = False
+        card.label = MANUAL_CARD_LABEL
+        session.flush()
+    return card
+
+
+def dedupe_key_for(card: Card, txn_date: date, merchant: str,
+                   signed_amount: float) -> str:
+    """The content dedupe key for one transaction, unique per user.
+
+    Keyed on the card's STABLE identity (bank+last4), not its display label —
+    a user relabeling a card must not make the same charge look new and
+    double-count it. Shared by ingestion and manual entry so that a bank email
+    arriving after the user already typed the charge in collapses onto the
+    existing row instead of doubling it.
+    """
+    return "|".join(str(p) for p in signature(
+        f"{card.bank}:{card.last4}", txn_date, merchant, signed_amount))
 
 
 def _rules_dict(session: Session, user_id) -> dict[str, str]:

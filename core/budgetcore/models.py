@@ -11,6 +11,12 @@ class Bank(str, Enum):
     POPULAR = "popular"
     QIK = "qik"
     BHD = "bhd"
+    # The bucket for hand-entered spend (cash, a transfer no bank emailed
+    # about). Deliberately has no BankSpec in banks.py: everything downstream
+    # — parser dispatch, the inbound spoofing guard, the onboarding bank
+    # picker — derives from SUPPORTED_BANKS, so MANUAL is never a parse target
+    # and never offered as a card to register.
+    MANUAL = "manual"
 
 
 class TxType(str, Enum):

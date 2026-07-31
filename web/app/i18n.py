@@ -92,6 +92,47 @@ _EN = {
     "Reenvía las notificaciones de tus tarjetas a":
         "Forward your card notifications to",
 
+    # manual transactions
+    "Añadir a mano": "Add by hand",
+    "Añadir transacción": "Add transaction",
+    "Editar transacción": "Edit transaction",
+    "Para lo que el banco no te notifica: efectivo, o una transferencia a otra persona.":
+        "For what your bank doesn't email you about: cash, or a transfer to another person.",
+    "Comercio o persona": "Merchant or person",
+    "p. ej. Juan Pérez": "e.g. Jane Doe",
+    "Fecha": "Date",
+    "Monto": "Amount",
+    "Moneda": "Currency",
+    "Tipo": "Type",
+    "Consumo": "Purchase",
+    "Retiro de efectivo": "Cash withdrawal",
+    "Reverso (devolución)": "Reversal (refund)",
+    "Cuenta o tarjeta": "Account or card",
+    "Elige una cuenta": "Choose an account",
+    "Efectivo / otro": "Cash / other",
+    "Automática (por reglas)": "Automatic (by rules)",
+    "Es un cargo aparte, no un duplicado": "This is a separate charge, not a duplicate",
+    "Guardar": "Save",
+    "Eliminar transacción": "Delete transaction",
+    "Sale del presupuesto de inmediato. No se puede deshacer.":
+        "It leaves your budget immediately. This can't be undone.",
+    "¿Eliminar esta transacción?": "Delete this transaction?",
+    "¿Un gasto que el banco no te notifica?":
+        "Spent something your bank doesn't email about?",
+    "Añádelo a mano": "Add it by hand",
+    # …and the form's own errors, rendered through t() on that page.
+    "Escribe el comercio o la persona.": "Enter the merchant or person.",
+    "Fecha inválida.": "Invalid date.",
+    "Monto inválido.": "Invalid amount.",
+    "El monto debe ser mayor que cero.": "The amount must be greater than zero.",
+    "Moneda inválida.": "Invalid currency.",
+    "Tipo inválido.": "Invalid type.",
+    "Elige una cuenta o tarjeta.": "Choose an account or card.",
+    "Categoría inválida.": "Invalid category.",
+    "Ya tienes una transacción idéntica: mismo comercio, fecha, monto y cuenta. Si de verdad es un cargo aparte, márcalo abajo.":
+        "You already have an identical transaction: same merchant, date, amount "
+        "and account. If it really is a separate charge, tick the box below.",
+
     # budgets
     "Monto mensual por categoría, en RD$.": "Monthly amount per category, in RD$.",
     "Guardar cambios": "Save changes",

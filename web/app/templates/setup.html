@@ -128,6 +128,10 @@
     </ol>
     {{ media.slot('step3-backfill', t('Ver cómo se hace')) }}
     <p class="muted small">{{ t('Opcional — puedes saltarte este paso y tus consumos se irán registrando solos desde ahora.') }}</p>
+    {# The dashboard is unreachable until the first transaction exists, so the
+       manual form has to be offered from here too. #}
+    <p class="muted small">{{ t('¿Un gasto que el banco no te notifica?') }}
+      <a href="/transactions/new">{{ t('Añádelo a mano') }}</a>.</p>
   </section>
 
   {# ---- Detected cards (review, only once they exist) ---- #}

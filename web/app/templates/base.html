@@ -168,6 +168,15 @@
     margin: 0 0 .75rem; font-size: .8rem; font-weight: 600;
     letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
   }
+  .section-title.with-action {
+    display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+  }
+  /* An action sitting in a section heading opts out of the heading's own
+     uppercase/tracking, which is for the label, not for a link. */
+  .title-action {
+    text-transform: none; letter-spacing: normal; white-space: nowrap;
+    text-decoration: none; color: var(--brand); font-weight: 600;
+  }
 
   /* ---- hero ---- */
   .hero { text-align: left; }
@@ -240,7 +249,7 @@
   .icon-btn {
     flex: none; display: grid; place-items: center; padding: .4rem;
     background: none; border: 1px solid var(--line); border-radius: 8px;
-    color: var(--muted); cursor: pointer;
+    color: var(--muted); cursor: pointer; text-decoration: none;
   }
   .icon-btn:hover { color: var(--brand); border-color: var(--brand); }
 
@@ -379,6 +388,28 @@
     font-size: .85rem; color: var(--muted);
   }
   footer a { color: var(--muted); }
+
+  /* ---- manual transaction form ---- */
+  .txn-form .field span {
+    display: block; font-size: .82rem; font-weight: 600;
+    color: var(--muted); margin-bottom: .3rem;
+  }
+  .txn-form input, .txn-form select { width: 100%; max-width: none; }
+  .txn-form input[name="original_amount"] {
+    font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  }
+  /* Two short fields share a line; they wrap to their own rows on a phone. */
+  .field-pair { display: flex; flex-wrap: wrap; gap: .75rem; }
+  .field-pair > .field { flex: 1 1 8rem; min-width: 0; }
+  .txn-form .field.check { display: flex; align-items: center; gap: .55rem; }
+  .txn-form .field.check input { width: auto; flex: none; }
+  .txn-form .field.check span {
+    margin: 0; font-weight: 500; font-size: .9rem; color: var(--ink);
+  }
+  .form-actions {
+    display: flex; justify-content: flex-end; align-items: center; gap: 1rem;
+  }
+  .form-actions a { color: var(--muted); font-size: .9rem; }
 
   /* ---- setup wizard ---- */
   .setup { max-width: 640px; margin: 0 auto; }

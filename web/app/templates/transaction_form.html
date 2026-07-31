@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}{{ t('Editar transacción') if txn else t('Añadir transacción') }} — Cualto{% endblock %}
+{% block content %}
+<div class="setup">
+  <h1>{{ t('Editar transacción') if txn else t('Añadir transacción') }}</h1>
+  <p class="lede">{{ t('Para lo que el banco no te notifica: efectivo, o una transferencia a otra persona.') }}</p>
+
+  {# Unlike the auth pages, these errors go through t(): they are plain Spanish
+     source strings with entries in i18n._EN, same as any other UI text. #}
+  {% if error %}<p class="alert err">{{ t(error) }}</p>{% endif %}
+
+  <section class="card">
+    <form class="txn-form" method="post"
+          action="{{ '/transactions/' ~ txn.id ~ '/edit' if txn else '/transactions/new' }}">
+      <label class="field">
+        <span>{{ t('Comercio o persona') }}</span>
+        <input name="merchant" value="{{ form.merchant }}" required maxlength="200"
+               autocomplete="off" placeholder="{{ t('p. ej. Juan Pérez') }}">
+      </label>
+
+      <div class="field-pair">
+        <label class="field">
+          <span>{{ t('Fecha') }}</span>
+          <input type="date" name="txn_date" value="{{ form.txn_date }}" required>
+        </label>
+        <label class="field">
+          <span>{{ t('Monto') }}</span>
+          <input name="original_amount" value="{{ form.original_amount }}"
+                 inputmode="decimal" required placeholder="0.00">
+        </label>
+      </div>
+
+      <div class="field-pair">
+        <label class="field">
+          <span>{{ t('Moneda') }}</span>
+          <select name="currency">
+            <option value="RD$" {{ "selected" if form.currency != 'US$' else "" }}>RD$</option>
+            <option value="US$" {{ "selected" if form.currency == 'US$' else "" }}>US$</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>{{ t('Tipo') }}</span>
+          <select name="tx_type">
+            <option value="consumo" {{ "selected" if form.tx_type == 'consumo' else "" }}>{{ t('Consumo') }}</option>
+            <option value="retiro" {{ "selected" if form.tx_type == 'retiro' else "" }}>{{ t('Retiro de efectivo') }}</option>
+            <option value="reversal" {{ "selected" if form.tx_type == 'reversal' else "" }}>{{ t('Reverso (devolución)') }}</option>
+          </select>
+        </label>
+      </div>
+
+      <label class="field">
+        <span>{{ t('Cuenta o tarjeta') }}</span>
+        {# «Efectivo / otro» is offered as a fixed last option rather than a row
+           of its own: the pseudo-card only gets created once it is actually
+           used, and it is filtered out of `cards` so it never appears twice. #}
+        <select name="card" required>
+          <option value="" disabled {{ "selected" if not form.card else "" }}>{{ t('Elige una cuenta') }}</option>
+          {% for c in cards %}
+          <option value="{{ c.id }}" {{ "selected" if form.card == c.id | string else "" }}>{{ c.display }}</option>
+          {% endfor %}
+          <option value="{{ manual_choice }}" {{ "selected" if form.card == manual_choice else "" }}>{{ t('Efectivo / otro') }}</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>{{ t('Categoría') }}</span>
+        <select name="category_id">
+          <option value="" {{ "selected" if not form.category_id else "" }}>{{ t('Automática (por reglas)') }}</option>
+          {% for c in categories %}
+          <option value="{{ c.id }}" {{ "selected" if form.category_id == c.id | string else "" }}>{{ c.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      {# Only shown after a collision: the transaction is content-identical to
+         one already stored, so saving it needs an explicit "yes, it happened
+         twice" instead of silently doubling the month. #}
+      {% if allow_separate %}
+      <label class="field check">
+        <input type="checkbox" name="separate" value="1">
+        <span>{{ t('Es un cargo aparte, no un duplicado') }}</span>
+      </label>
+      {% endif %}
+
+      <div class="form-actions">
+        <a href="/">{{ t('Cancelar') }}</a>
+        <button type="submit">{{ t('Guardar') }}</button>
+      </div>
+    </form>
+  </section>
+
+  {% if txn %}
+  <section class="card danger-card">
+    <h2 class="section-title">{{ t('Eliminar transacción') }}</h2>
+    <p class="muted">{{ t('Sale del presupuesto de inmediato. No se puede deshacer.') }}</p>
+    <form method="post" action="/transactions/{{ txn.id }}/delete"
+          onsubmit="return confirm('{{ t('¿Eliminar esta transacción?') }}')">
+      <button class="quiet">{{ t('Eliminar') }}</button>
+    </form>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

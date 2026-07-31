@@ -28,6 +28,7 @@ from ..templating import templates
 from sqlalchemy import func, select
 
 from budgetcore.banks import bank_choices, from_query
+from budgetcore.models import Bank
 
 from ..auth.deps import current_user
 from ..db import get_sessionmaker
@@ -164,7 +165,11 @@ def _confirmation_state(session, user_id, own_email: str) -> tuple[list[dict], s
 @router.get("/setup")
 def setup_page(request: Request, user: User = Depends(current_user)):
     with get_sessionmaker()() as session:
-        cards = session.scalars(select(Card).where(Card.user_id == user.id)
+        # The manual "Efectivo / otro" bucket is not a detected card: there is
+        # nothing to review or relabel about it, and it has no bank behind it.
+        cards = session.scalars(select(Card)
+                                .where(Card.user_id == user.id,
+                                       Card.bank != Bank.MANUAL.value)
                                 .order_by(Card.needs_review.desc(),
                                           Card.bank, Card.last4)).all()
         tx_count = session.scalar(select(func.count()).select_from(Transaction)
