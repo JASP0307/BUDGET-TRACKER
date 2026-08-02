@@ -7,6 +7,7 @@ Formats are documented in the project's NOTES.md ("Email formats"). Shapes:
   - Qik "Se reversó una transacción..."      (reversal, label/value table)
   - BHD "Notificación de Transacciones"      (card purchase, 6-col table)
   - BHD "Transacciones entre productos..."   (transfer, id-tagged fields)
+  - Banreservas "Notificación de Consumo"    (card purchase, stacked label/value)
 
 Parsers are pure: raw HTML in, Transaction out. They identify the card only
 as (bank, last4) — display labels belong to the caller's card registry.
@@ -324,10 +325,105 @@ def _parse_bhd_transfer(
     )
 
 
+# Banreservas prints ISO currency codes ("DOP 900.00") where every other bank
+# prints a symbol; map them onto the RD$/US$ vocabulary the rest of the pipeline
+# speaks (Transaction.currency, _to_dop, and the caller's FX bookkeeping).
+_BANRESERVAS_MONEY_RE = re.compile(r"\b(DOP|USD)\s*([\d.,]+)")
+_BANRESERVAS_CURRENCY = {"DOP": "RD$", "USD": "US$"}
+# "Su tarjeta VISA CLASICA ••6666": two or more mask characters, so it cannot
+# match the single-asterisk "Visa *6666" of the payment receipts.
+_BANRESERVAS_CARD_RE = re.compile(r"[•·*]{2,}\s*(\d{4})")
+
+
+def _parse_banreservas(
+    message_id: str, subject: str, html: str, *, usd_to_dop: float
+) -> Transaction | None:
+    """Banreservas "Notificación de Consumo": a card purchase, with the details
+    stacked as label-above-value rather than in columns.
+
+    Only card consumptions are spend. The App transaction receipts
+    ("¡Pago realizado!", from NotificacionesTuBancoApp@ on the same domain, so
+    they land here too) are card payments and transfers between the user's own
+    products — logging those would double-count charges already captured from
+    this very card. They carry Origen/Destino and no Comercio, and that absence
+    is what rejects them."""
+    soup = BeautifulSoup(html, "html.parser")
+    fields = _banreservas_fields(soup)
+
+    merchant = fields.get("Comercio", "").strip()
+    if not merchant:
+        return None  # a payment/transfer receipt, or non-transaction mail
+
+    # Strict: only a confirmed approval is spend. Banreservas' wording for a
+    # decline or a reversal has never been seen, and guessing it risks logging a
+    # decline as a purchase. Mail skipped this way keeps its body for the purge
+    # window (see ingest.NOT_LOGGABLE_NOTE), so the first real one is preserved
+    # verbatim and this gate can be widened from the actual text.
+    if fields.get("Estado", "").strip().upper() != "APROBADO":
+        return None
+
+    money = _banreservas_money(fields.get("Monto", ""))
+    if money is None:
+        return None
+    currency, value = money
+
+    # "Fecha de transacción" is the only accented label, so an entity-encoded
+    # variant would change the key — fall back to the body, which carries
+    # exactly one DD/MM/YYYY date.
+    text = soup.get_text(" ", strip=True)
+    fecha = (_POPULAR_DATE_RE.search(fields.get("Fecha de transacción", ""))
+             or _POPULAR_DATE_RE.search(text))
+    if fecha is None:
+        return None
+
+    card = _BANRESERVAS_CARD_RE.search(text)
+    return Transaction(
+        message_id=message_id,
+        bank=Bank.BANRESERVAS,
+        last4=card.group(1) if card else "????",
+        tx_type=TxType.CONSUMO,
+        txn_date=datetime.strptime(fecha.group(1), "%d/%m/%Y").date(),
+        merchant=merchant,
+        amount_dop=_to_dop(currency, value, usd_to_dop),
+        original_amount=value,
+        currency=currency,
+    )
+
+
+def _banreservas_fields(soup: BeautifulSoup) -> dict[str, str]:
+    """Label->value pairs from Banreservas' stacked detail tables.
+
+    Every detail is a two-row inner table — a "Label:" cell above its value cell
+    — so in document order each label cell is immediately followed by its value.
+    Read that adjacency rather than the CSS classes the layout is built on:
+    Gmail prefixes every class when it forwards ("message_title" becomes
+    "m_-784…message_title"), and forwarded mail is what we actually receive.
+
+    Any cell ending in a colon is treated as a label, so the result also picks
+    up noise — a wrapper cell, or the "…desde tu App Banreservas:" lead-in of a
+    receipt. Harmless: callers only ever read the handful of keys they know."""
+    cells = [c for c in (td.get_text(" ", strip=True)
+                         for td in soup.find_all("td")) if c]
+    fields: dict[str, str] = {}
+    for label, value in zip(cells, cells[1:]):
+        if label.endswith(":"):
+            fields.setdefault(label[:-1].strip(), value)
+    return fields
+
+
+def _banreservas_money(text: str) -> tuple[str, float] | None:
+    """Return (currency, value) for an ISO-coded amount: "DOP 900.00"."""
+    m = _BANRESERVAS_MONEY_RE.search(text)
+    if not m:
+        return None
+    return _BANRESERVAS_CURRENCY[m.group(1)], float(m.group(2).replace(",", ""))
+
+
 # Which parser handles each supported bank. Adding a bank means a new BankSpec
 # in banks.py, a _parse_<bank> above, and one line here.
 _PARSERS = {
     Bank.POPULAR: _parse_popular,
     Bank.QIK: _parse_qik,
     Bank.BHD: _parse_bhd,
+    Bank.BANRESERVAS: _parse_banreservas,
 }
