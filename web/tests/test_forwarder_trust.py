@@ -64,6 +64,20 @@ def _srs_return_path(mailbox: str, token: str) -> str:
             f"=inbound.postmarkapp.com@{domain}>")
 
 
+def _standard_srs_return_path(forwarding_domain: str, sender: str = QIK_SENDER,
+                              *, version: int = 0) -> str:
+    """Standard SRS — what every forwarder that isn't Gmail emits (Microsoft,
+    Postfix, cPanel): the *original sender* re-hosted at the forwarding domain.
+
+    Note what is and isn't in here: the bank's local part and domain are, the
+    forwarding mailbox is not. That asymmetry is the whole point — there is no
+    address to attribute, only a domain.
+    """
+    orig_local, orig_domain = sender.split("@", 1)
+    return (f"<SRS{version}=HHH=TT={orig_domain}={orig_local}"
+            f"@{forwarding_domain}>")
+
+
 def _raw(message_id):
     from web.app.db import get_sessionmaker
     from web.app.models import RawEmail
@@ -223,6 +237,73 @@ def test_unidentifiable_forwarder_is_let_through(client):
         {"Name": "Return-Path", "Value": f"<{QIK_SENDER}>"}]))
     assert resp.json() == {"status": "processed"}
     assert len(_transactions()) == 1
+
+
+# ---- Providers that aren't Gmail ----
+
+def test_standard_srs_autoforward_is_ingested(client):
+    """REGRESSION (2026-08-02, first Hotmail signup): a standard `SRS0=`
+    Return-Path used to be picked apart by the generic address fallback, which
+    matched the tail of the SRS token — `notificaciones@outlook.com` for a Qik
+    email — called that the forwarding mailbox, found it in nobody's trusted
+    set, and rejected every real transaction the user had.
+
+    An SRS token names a forwarding *domain* and no mailbox, so the honest
+    answer is "can't tell", which lands on the fail-open path below.
+    """
+    resp = _post(client, _payload("t12", _token(client), headers=[
+        {"Name": "Return-Path", "Value": _standard_srs_return_path("outlook.com")}]))
+    assert resp.json() == {"status": "processed"}
+    assert len(_transactions()) == 1
+
+
+def test_standard_srs_is_not_read_as_a_forwarding_mailbox(client):
+    """The specific misreading, pinned directly: nothing derived from the SRS
+    token may end up in the rejection note."""
+    _post(client, _payload("t13", _token(client), headers=[
+        {"Name": "Return-Path", "Value": _standard_srs_return_path("outlook.com")}]))
+    raw = _raw("t13")
+    assert raw.processing_status == "processed"
+    assert "outlook.com" not in (raw.note or "")
+
+
+def test_srs1_chained_forward_is_ingested(client):
+    """A second hop rewrites SRS0 to SRS1; same reasoning, same outcome."""
+    resp = _post(client, _payload("t14", _token(client), headers=[
+        {"Name": "Return-Path",
+         "Value": _standard_srs_return_path("hotmail.com", version=1)}]))
+    assert resp.json() == {"status": "processed"}
+
+
+def test_standard_srs_does_not_excuse_a_manual_forward_from_a_stranger(client):
+    """Failing open on the SRS *header* must not weaken the From fallback: a
+    stranger manually forwarding still owns From, and is still refused. This is
+    what keeps the 2026-07-26 incident closed for non-Gmail providers."""
+    resp = _post(client, _payload("t15", _token(client), sender=STRANGER, headers=[
+        {"Name": "Return-Path", "Value": _standard_srs_return_path("outlook.com")}]))
+    assert resp.json() == {"status": "rejected"}
+    assert _transactions() == []
+
+
+def test_a_later_header_still_names_the_forwarder(client):
+    """An unreadable Return-Path skips that value rather than abandoning the
+    search — X-Forwarded-For is still consulted, and still rejects a stranger."""
+    token = _token(client)
+    resp = _post(client, _payload("t16", token, headers=[
+        {"Name": "Return-Path", "Value": _standard_srs_return_path("outlook.com")},
+        {"Name": "X-Forwarded-For",
+         "Value": f"{STRANGER} u_{token}@in.example.do"}]))
+    assert resp.json() == {"status": "rejected"}
+    assert _transactions() == []
+
+
+def test_gmail_srs_still_identifies_the_forwarder(client):
+    """The new SRS branch must not shadow Gmail's `+caf_=` form, which *does*
+    name the mailbox and must keep rejecting a stranger's auto-forward."""
+    token = _token(client)
+    assert _post(client, _payload("t17", token, headers=[
+        {"Name": "Return-Path", "Value": _srs_return_path(STRANGER, token)}]
+    )).json() == {"status": "rejected"}
 
 
 def test_gmail_forwarding_confirmation_is_never_rejected(client):
