@@ -304,6 +304,14 @@
     font-family: var(--font-mono); font-variant-numeric: tabular-nums;
     text-align: right; width: 8.5rem;
   }
+  /* Keeps a unit suffix welded to its input. Left loose in a `.cat-line`, the
+     "%" became a third anonymous flex item, so space-between pinned it to the
+     far right and left the input drifting with each category name's length —
+     no two numbers landed on the same x. Grouped, the fixed-width right-aligned
+     input puts every last digit, and so every "%", in one column. */
+  .unit-field { display: inline-flex; align-items: baseline; }
+  /* Mono so the suffix matches the tabular figures it sits against. */
+  .unit-field .unit { font-family: var(--font-mono); }
 
   /* ---- misc ---- */
   .cta {
