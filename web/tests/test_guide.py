@@ -13,7 +13,7 @@ def test_help_is_public(client):
 
 def test_help_lists_supported_banks(client):
     html = client.get("/help").text
-    for display in ("Banco Popular", "Qik", "Banco BHD"):
+    for display in ("Banco Popular", "Qik", "Banco BHD", "Banreservas"):
         assert display in html
 
 

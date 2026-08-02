@@ -174,3 +174,53 @@ def test_bhd_card_purchase_reversal_is_negative():
     assert txn.merchant == "Consumo BHD"  # reversal row has no Comercio
     assert txn.amount_dop == pytest.approx(4857.00)
     assert txn.signed_amount() == pytest.approx(-4857.00)  # refund self-corrects
+
+
+BANRESERVAS = "notificaciones@banreservas.com"
+BANRESERVAS_APP = "NotificacionesTuBancoApp@banreservas.com"
+
+
+def test_banreservas_consumo_is_spend():
+    txn = parse_email("r1", BANRESERVAS, "Notificaciones Banreservas",
+                      _load("banreservas_consumo.html"), usd_to_dop=RATE)
+    assert txn is not None
+    assert txn.tx_type is TxType.CONSUMO
+    assert txn.bank is Bank.BANRESERVAS
+    assert txn.last4 == "6666"  # from "VISA CLASICA ••6666"
+    assert txn.txn_date == date(2026, 8, 1)  # 01/08/2026 is DD/MM/YYYY, not Jan 8
+    assert txn.merchant == "SALON EJEMPLO SANTO DOMINGODO"
+    assert txn.currency == "RD$"  # printed "DOP 900.00" — the ISO code is mapped
+    assert txn.original_amount == pytest.approx(900.00)
+    assert txn.amount_dop == pytest.approx(900.00)
+    assert txn.signed_amount() == pytest.approx(900.00)
+
+
+def test_banreservas_consumo_survives_gmail_forwarding():
+    # Gmail prefixes every class name when it forwards, and forwarded mail is
+    # what actually reaches us — so the parser must not read classes at all.
+    txn = parse_email("r2", BANRESERVAS, "Fwd: Notificaciones Banreservas",
+                      _load("banreservas_consumo_forwarded.html"), usd_to_dop=RATE)
+    assert txn is not None
+    assert (txn.bank, txn.last4) == (Bank.BANRESERVAS, "6666")
+    assert txn.merchant == "SALON EJEMPLO SANTO DOMINGODO"
+    assert txn.txn_date == date(2026, 8, 1)
+    assert txn.amount_dop == pytest.approx(900.00)
+
+
+def test_banreservas_card_payment_is_ignored():
+    # "¡Pago realizado!" — paying your own card off from your own account. The
+    # purchases on that card are already logged, so counting the payment too
+    # would double-count. Sent from the App address, which shares the domain and
+    # so lands in this parser as well.
+    txn = parse_email("r3", BANRESERVAS_APP, "Recibo de la transacción",
+                      _load("banreservas_pago_tarjeta.html"), usd_to_dop=RATE)
+    assert txn is None
+
+
+def test_banreservas_non_approved_state_is_skipped():
+    # Banreservas' wording for a decline or a reversal has never been sampled, so
+    # anything that is not APROBADO is skipped rather than guessed at.
+    html = _load("banreservas_consumo.html").replace("APROBADO", "DECLINADO")
+    txn = parse_email("r4", BANRESERVAS, "Notificaciones Banreservas",
+                      html, usd_to_dop=RATE)
+    assert txn is None

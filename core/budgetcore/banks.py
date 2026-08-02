@@ -32,6 +32,10 @@ SUPPORTED_BANKS: tuple[BankSpec, ...] = (
     # BHD notifies card/account movement from Alertas@; the transfer alerts are
     # the ones we log as spend (see parsers._parse_bhd).
     BankSpec(Bank.BHD, "Banco BHD", "alertas@bhd.com.do"),
+    # Banreservas sends card-consumption alerts from notificaciones@. Its App
+    # receipts (NotificacionesTuBancoApp@ — same domain, so the same parser)
+    # are card payments and transfers, which _parse_banreservas ignores.
+    BankSpec(Bank.BANRESERVAS, "Banreservas", "notificaciones@banreservas.com"),
 )
 
 

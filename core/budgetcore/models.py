@@ -11,6 +11,7 @@ class Bank(str, Enum):
     POPULAR = "popular"
     QIK = "qik"
     BHD = "bhd"
+    BANRESERVAS = "banreservas"
     # The bucket for hand-entered spend (cash, a transfer no bank emailed
     # about). Deliberately has no BankSpec in banks.py: everything downstream
     # — parser dispatch, the inbound spoofing guard, the onboarding bank
