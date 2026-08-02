@@ -81,9 +81,11 @@
               <input type="checkbox" name="enabled_{{ r.category.id }}" {{ "checked" if r.cat_enabled }}>
               {{ r.category.name }}
             </label>
-            <input class="amount" type="number" inputmode="numeric" step="1" min="0" max="1000"
-                   id="threshold_{{ r.category.id }}" name="threshold_{{ r.category.id }}"
-                   value="{{ "%.0f" | format(r.threshold) }}">%
+            <span class="unit-field">
+              <input class="amount" type="number" inputmode="numeric" step="1" min="0" max="1000"
+                     id="threshold_{{ r.category.id }}" name="threshold_{{ r.category.id }}"
+                     value="{{ "%.0f" | format(r.threshold) }}"><span class="unit">%</span>
+            </span>
           </div>
         </li>
         {% endfor %}
