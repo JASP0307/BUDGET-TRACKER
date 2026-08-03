@@ -21,6 +21,28 @@ def _signup_login(client, email, pw="supersecret"):
     return uid
 
 
+def _login_owner(client):
+    """The owner is the BUDGET_USER_EMAIL account created by bootstrap. Give it
+    a password (bootstrap leaves it blank in tests) and sign in."""
+    from web.app.auth.security import hash_password
+    from web.app.db import get_sessionmaker
+    from web.app.models import User
+    from web.app.settings import get_settings
+    email = get_settings().default_user_email
+    with get_sessionmaker()() as s:
+        owner = s.scalar(select(User).where(User.email == email))
+        owner.hashed_password = hash_password("ownerpass1")
+        s.commit()
+    client.post("/login", data={"email": email, "password": "ownerpass1"})
+    return email
+
+
+def _link_chat(client, uid, chat_id=123):
+    from web.app.services.telegram import make_link_token
+    client.post("/webhooks/telegram/dev-tg-secret",
+                json=_tg_update(f"/start {make_link_token(uid)}", chat_id=chat_id))
+
+
 def _pref(uid):
     from web.app.db import get_sessionmaker
     from web.app.models import NotificationPref
@@ -81,6 +103,56 @@ def test_toggle_and_disconnect(client):
     client.post("/notifications/telegram/disconnect")
     pref = _pref(uid)
     assert pref.telegram_chat_id is None and pref.enabled is False
+
+
+# The card's heading, which renders whenever the card does. Tests run without a
+# bot token, so the connect button and the toggles never render — only this.
+_CARD = "<h2>Telegram</h2>"
+
+
+def test_telegram_card_is_hidden_from_non_admins(client):
+    """Telegram is withdrawn from the public product for now: an ordinary
+    account sees the email card only, and never an invitation to connect."""
+    _signup_login(client, "tg-hidden@example.com")
+    page = client.get("/notifications")
+    assert page.status_code == 200
+    assert _CARD not in page.text
+    assert 'action="/notifications/telegram/' not in page.text
+    assert 'action="/notifications/email/toggle"' in page.text  # email survives
+
+
+def test_telegram_endpoints_404_for_non_admins(client):
+    """Hiding the card is not the guard — the endpoints refuse it too, so a
+    hand-rolled POST gets nowhere."""
+    uid = _signup_login(client, "tg-guard@example.com")
+    for path in ("toggle", "test", "disconnect"):
+        r = client.post(f"/notifications/telegram/{path}", data={"enabled": "on"})
+        assert r.status_code == 404, path
+    assert _pref(uid) is None
+
+
+def test_owner_still_sees_the_telegram_card(client):
+    _login_owner(client)
+    page = client.get("/notifications")
+    assert page.status_code == 200 and _CARD in page.text
+
+
+def test_already_linked_user_keeps_control_until_it_disconnects(client):
+    """Nobody is left with alerts they can't turn off: an account that linked a
+    chat before the feature was withdrawn keeps the card. Disconnecting is a
+    one-way exit — the card goes for good."""
+    uid = _signup_login(client, "tg-grandfathered@example.com")
+    _link_chat(client, uid, chat_id=321)
+
+    assert _CARD in client.get("/notifications").text
+    r = client.post("/notifications/telegram/toggle", data={}, follow_redirects=False)
+    assert r.status_code == 303 and _pref(uid).enabled is False
+
+    r = client.post("/notifications/telegram/disconnect", follow_redirects=False)
+    assert r.status_code == 303 and _pref(uid).telegram_chat_id is None
+
+    assert _CARD not in client.get("/notifications").text
+    assert client.post("/notifications/telegram/toggle", data={}).status_code == 404
 
 
 def test_link_token_is_per_user(client):

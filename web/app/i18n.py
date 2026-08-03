@@ -169,6 +169,10 @@ _EN = {
     # notifications
     "Recibe un aviso al instante cuando uses una tarjeta, con lo que te queda del presupuesto de esa categoría.":
         "Get an instant alert when you use a card, with how much is left in that category's budget.",
+    # Shown instead of the line above when Telegram is hidden, i.e. email is the
+    # only channel left on the page.
+    "Recibe un correo cuando una categoría se acerca a su límite de presupuesto.":
+        "Get an email when a category is close to its budget limit.",
     "Alertas por chat, gratis y al instante.": "Chat alerts, free and instant.",
     "Conectado": "Connected",
     "Las alertas por Telegram no están disponibles todavía en este servidor.":
@@ -285,6 +289,9 @@ _EN = {
     # transaction, email only when a category crosses its threshold.
     "¿Quieres un aviso al instante en cada compra, o un correo solo cuando te pases del presupuesto?":
         "Want an instant alert on every purchase, or an email only when you go over budget?",
+    # ...and the email-only version, for accounts that can't see Telegram.
+    "¿Quieres un correo cuando te pases del presupuesto?":
+        "Want an email when you go over budget?",
     "Configura tus alertas": "Set up your alerts",
     "No se pudo generar tu dirección de ingesta. Recarga la página o contacta soporte.":
         "We couldn't generate your intake address. Reload the page or contact support.",

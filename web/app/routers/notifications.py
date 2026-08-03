@@ -13,17 +13,27 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from ..templating import templates
 
-from ..auth.deps import current_user
+from ..auth.deps import current_user, is_admin
 from ..db import get_sessionmaker
 from ..models import Category, User
 from ..services import notify, telegram
 
 router = APIRouter()
+
+
+def _require_telegram(user: User = Depends(current_user)) -> User:
+    """Guard for the Telegram endpoints, so hiding the card in the template
+    isn't the only thing standing between a non-admin and the channel. 404 like
+    require_admin: a withdrawn feature shouldn't advertise itself."""
+    with get_sessionmaker()() as session:
+        if not notify.telegram_visible(session, user):
+            raise HTTPException(status_code=404)
+    return user
 
 
 @router.get("/notifications")
@@ -32,6 +42,9 @@ def notifications_page(request: Request, user: User = Depends(current_user)):
         pref = notify.get_pref(session, user.id, notify.TELEGRAM)
         linked = pref is not None and bool(pref.telegram_chat_id)
         enabled = bool(pref and pref.enabled)
+        # Same rule as notify.telegram_visible, spelled out here because we
+        # already hold the pref this query would repeat.
+        tg_visible = is_admin(user) or linked
 
         email_pref = notify.get_pref(session, user.id, notify.EMAIL)
         email_enabled = bool(email_pref and email_pref.enabled)
@@ -48,9 +61,10 @@ def notifications_page(request: Request, user: User = Depends(current_user)):
             })
     bot_username = telegram.get_bot_username()
     link = None
-    if bot_username and not linked:
+    if bot_username and tg_visible and not linked:
         link = telegram.deep_link(telegram.make_link_token(user.id))
     return templates.TemplateResponse(request, "notifications.html", {
+        "telegram_visible": tg_visible,
         "bot_configured": bot_username is not None,
         "linked": linked,
         "enabled": enabled,
@@ -61,7 +75,7 @@ def notifications_page(request: Request, user: User = Depends(current_user)):
 
 
 @router.post("/notifications/telegram/toggle")
-def toggle_telegram(enabled: str = Form(""), user: User = Depends(current_user)):
+def toggle_telegram(enabled: str = Form(""), user: User = Depends(_require_telegram)):
     with get_sessionmaker()() as session:
         notify.set_enabled(session, user.id, notify.TELEGRAM,
                            enabled == "on")
@@ -69,14 +83,14 @@ def toggle_telegram(enabled: str = Form(""), user: User = Depends(current_user))
 
 
 @router.post("/notifications/telegram/disconnect")
-def disconnect_telegram(user: User = Depends(current_user)):
+def disconnect_telegram(user: User = Depends(_require_telegram)):
     with get_sessionmaker()() as session:
         notify.disconnect_telegram(session, user.id)
     return RedirectResponse("/notifications", status_code=303)
 
 
 @router.post("/notifications/telegram/test")
-def test_telegram(user: User = Depends(current_user)):
+def test_telegram(user: User = Depends(_require_telegram)):
     with get_sessionmaker()() as session:
         pref = notify.get_pref(session, user.id, notify.TELEGRAM)
         chat_id = pref.telegram_chat_id if pref else None
