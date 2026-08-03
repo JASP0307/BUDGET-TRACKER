@@ -3,8 +3,9 @@
 {% block content %}
 <div class="setup">
   <h1>{{ t('Notificaciones') }}</h1>
-  <p class="lede">{{ t('Recibe un aviso al instante cuando uses una tarjeta, con lo que te queda del presupuesto de esa categoría.') }}</p>
+  <p class="lede">{% if telegram_visible %}{{ t('Recibe un aviso al instante cuando uses una tarjeta, con lo que te queda del presupuesto de esa categoría.') }}{% else %}{{ t('Recibe un correo cuando una categoría se acerca a su límite de presupuesto.') }}{% endif %}</p>
 
+  {% if telegram_visible %}
   <section class="card">
     <div class="notif-head">
       <div class="notif-title">
@@ -49,6 +50,7 @@
       {{ t('El enlace es personal y vence en 15 minutos. Si expira, recarga esta página.') }}</p>
     {% endif %}
   </section>
+  {% endif %}
 
   <section class="card">
     <div class="notif-head">

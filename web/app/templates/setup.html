@@ -195,7 +195,7 @@
     </form>
   </details>
 
-  <p class="muted setup-more">{{ t('¿Quieres un aviso al instante en cada compra, o un correo solo cuando te pases del presupuesto?') }}
+  <p class="muted setup-more">{% if telegram_visible %}{{ t('¿Quieres un aviso al instante en cada compra, o un correo solo cuando te pases del presupuesto?') }}{% else %}{{ t('¿Quieres un correo cuando te pases del presupuesto?') }}{% endif %}
     <a href="/notifications">{{ t('Configura tus alertas') }}</a>.</p>
   {% else %}
   <p class="muted">{{ t('No se pudo generar tu dirección de ingesta. Recarga la página o contacta soporte.') }}</p>

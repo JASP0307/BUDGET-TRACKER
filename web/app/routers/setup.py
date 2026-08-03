@@ -33,6 +33,7 @@ from budgetcore.models import Bank
 from ..auth.deps import current_user
 from ..db import get_sessionmaker
 from ..models import Card, InboundAddress, RawEmail, Transaction, User
+from ..services import notify
 from ..services.inbound import format_inbound_address
 
 router = APIRouter()
@@ -206,6 +207,7 @@ def setup_page(request: Request, user: User = Depends(current_user)):
             "own_email": user.email,
             "rejected_forwards": _rejected_forwards(session, user.id),
             "tx_count": tx_count,
+            "telegram_visible": notify.telegram_visible(session, user),
         })
 
 

@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from budgetcore.messages import sweep_message, transaction_message
 from budgetcore.models import Transaction as CoreTxn
 
+from ..auth.deps import is_admin
 from ..models import CategoryAlertPref, NotificationPref, User
 from ..settings import get_settings
 from . import email, telegram
@@ -45,6 +46,17 @@ def _ensure_pref(session: Session, user_id, channel: str) -> NotificationPref:
         session.add(pref)
         session.flush()
     return pref
+
+
+def telegram_visible(session: Session, user: User) -> bool:
+    """Telegram is admin-only for now — the public product ships email alerts
+    only until we know users want a chat channel. Accounts that linked a chat
+    before it was withdrawn keep the card so they can still pause or
+    disconnect; once they do, it disappears for good."""
+    if is_admin(user):
+        return True
+    pref = get_pref(session, user.id, TELEGRAM)
+    return pref is not None and bool(pref.telegram_chat_id)
 
 
 def set_telegram_chat(session: Session, user_id, chat_id: str) -> None:
