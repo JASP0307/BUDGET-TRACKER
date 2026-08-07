@@ -34,6 +34,7 @@ log = logging.getLogger("inbound.resend")
 
 _API = "https://api.resend.com"
 _TIMEOUT = 20
+_MAX_PAGE = 100  # the received-emails endpoint's documented ceiling
 
 # Where Resend records the address a message was actually delivered to. The
 # webhook's `to` is the header, which forwarded mail fills with the bank's
@@ -62,6 +63,45 @@ def fetch_email(email_id: str) -> dict:
         detail = getattr(exc.response, "text", "") or str(exc)
         raise ReceivedEmailUnavailable(
             f"could not fetch received email {email_id}: {detail}") from exc
+
+
+def list_received(*, page_size: int = _MAX_PAGE, max_pages: int = 20) -> list[dict]:
+    """Received emails Resend still holds, newest first.
+
+    Feeds ``services.reconcile``, which subtracts what we already stored to find
+    mail no webhook ever delivered — after an outage longer than Resend's retry
+    window there is no other trace of it. The endpoint has no date filter, only
+    an id cursor, so pages are walked until one comes back short.
+
+    A transport failure raises rather than returning the pages it did get: a
+    half-read list would make every email we never saw look like one we already
+    have, i.e. report a clean inbox precisely when something is wrong.
+    ``max_pages`` is a different thing — a deliberate bound on how far back to
+    look, and reaching it only leaves mail older than the reconcilable window.
+    """
+    out: list[dict] = []
+    cursor = ""
+    for _ in range(max_pages):
+        params: dict = {"limit": page_size}
+        if cursor:
+            params["after"] = cursor
+        try:
+            resp = requests.get(f"{_API}/emails/receiving", params=params,
+                                headers=_auth(), timeout=_TIMEOUT)
+            resp.raise_for_status()
+            page = resp.json().get("data") or []
+        except (requests.RequestException, ValueError) as exc:
+            detail = getattr(getattr(exc, "response", None), "text", "") or str(exc)
+            raise ReceivedEmailUnavailable(
+                f"could not list received emails: {detail}") from exc
+
+        out.extend(item for item in page
+                   if isinstance(item, dict) and item.get("id"))
+        if len(page) < page_size or not out:
+            return out
+        cursor = str(out[-1]["id"])
+    log.warning("received-email list stopped at the %d-page cap", max_pages)
+    return out
 
 
 def _download(url: str) -> bytes:

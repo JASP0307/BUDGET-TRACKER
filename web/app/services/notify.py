@@ -12,11 +12,13 @@ CategoryAlertPref rows the settings page edits.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from budgetcore.messages import sweep_message, transaction_message
+from budgetcore.messages import (reconcile_message, sweep_message,
+                                 transaction_message)
 from budgetcore.models import Transaction as CoreTxn
 
 from ..auth.deps import is_admin
@@ -152,3 +154,24 @@ def notify_sweep(session: Session, calls: int, created: int,
         return
     telegram.send_message(pref.telegram_chat_id,
                           sweep_message(calls, created, elapsed))
+
+
+def notify_reconcile(session: Session, ingested: int, failed: int,
+                     recovered: Sequence[str], stale_hours: float | None) -> None:
+    """Tell the owner the inbound reconciler had something to report — mail it
+    recovered, mail it couldn't, or an inbox gone quiet. Caller only invokes
+    this when there is something to say. No-op if Telegram isn't linked.
+
+    Takes plain values rather than the ReconcileResult so that notify stays
+    importable from ingest, which services.reconcile imports in turn.
+    """
+    owner = session.scalar(select(User).where(
+        func.lower(User.email) == get_settings().default_user_email.lower()))
+    if owner is None:
+        return
+    pref = get_pref(session, owner.id, TELEGRAM)
+    if pref is None or not pref.enabled or not pref.telegram_chat_id:
+        return
+    telegram.send_message(
+        pref.telegram_chat_id,
+        reconcile_message(ingested, failed, recovered, stale_hours))
