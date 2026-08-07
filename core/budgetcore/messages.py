@@ -7,6 +7,7 @@ Pure string functions — no transport. Callers decide the channel
 from __future__ import annotations
 
 import html
+from collections.abc import Sequence
 from datetime import date
 
 from .categorize import is_uncategorized
@@ -38,6 +39,33 @@ def sweep_message(calls: int, created: int, elapsed: float) -> str:
     return (f"🤖 <b>Sugerencias de categoría</b>\n"
             f"{calls} {merchants} consultados ({elapsed:.0f}s) · "
             f"{created} {suggs}")
+
+
+def reconcile_message(ingested: int, failed: int, recovered: Sequence[str],
+                      stale_hours: float | None) -> str:
+    """The inbound reconciler found something the owner should know about: mail
+    it had to recover, mail it could not, or an inbox that has gone quiet. The
+    caller only sends this when one of those is true."""
+    lines = ["📬 <b>Reconciliación de correo</b>"]
+
+    if ingested:
+        noun = "correo recuperado" if ingested == 1 else "correos recuperados"
+        lines.append(f"<b>{ingested}</b> {noun} que ningún webhook entregó:")
+        lines += [f"• {html.escape(item)}" for item in recovered]
+        if ingested > len(recovered):
+            lines.append(f"• …y {ingested - len(recovered)} más")
+
+    if failed:
+        verb = "no se pudo" if failed == 1 else "no se pudieron"
+        noun = "correo" if failed == 1 else "correos"
+        lines.append(f"⚠️ <b>{failed}</b> {noun} {verb} recuperar — "
+                     f"se reintenta en la próxima pasada.")
+
+    if stale_hours is not None:
+        lines.append(f"🔇 Sin correo entrante desde hace <b>{stale_hours:.0f} h</b>. "
+                     f"¿Sigue activo el reenvío?")
+
+    return "\n".join(lines)
 
 
 def transaction_message(txn: Transaction, spent: float, budget: float) -> str:
