@@ -39,9 +39,10 @@ from . import notify
 
 log = logging.getLogger("ingest")
 
-# Auto-forwarded Gmail keeps the original bank as the From header; anything
-# else mailed to an inbound address is either Gmail's forwarding-confirmation
-# or noise/spoofing. Derived from the bank registry (budgetcore.banks).
+# Auto-forwarded mail keeps the original bank as the From header, whichever
+# provider does the forwarding; anything else mailed to an inbound address is
+# either Gmail's forwarding-confirmation or noise/spoofing. Derived from the
+# bank registry (budgetcore.banks).
 KNOWN_BANK_DOMAINS = bank_domains()
 GMAIL_CONFIRMATION_SENDER = "forwarding-noreply@google.com"
 _TOKEN_RE = re.compile(r"^u_([a-z0-9]{6,32})@", re.IGNORECASE)
@@ -71,6 +72,16 @@ _GMAIL_CODE_RE = re.compile(r"\b(\d{9})\b")  # legacy numeric confirmation code
 # is the only place auto-forwarded mail names it — From is the bank.
 _SRS_RETURN_PATH_RE = re.compile(
     r"<?([\w.\-]+)\+caf_=[^@\s>]*@([\w.\-]+\.\w+)>?", re.IGNORECASE)
+# Standard SRS — what Microsoft, Postfix and cPanel emit, i.e. every forwarder
+# that isn't Gmail: SRS0=<hash>=<tt>=<origdomain>=<origlocal>@<forwarder>.
+# Unlike Gmail's +caf_= rewrite this encodes the *original sender* re-hosted at
+# the forwarder's domain; the forwarding mailbox is not in there at all, so
+# there is nothing to attribute. Matched purely so `_ANY_ADDR_RE` can't mistake
+# the token's tail (`=<origlocal>@<forwarder>`) for a forwarding address — on a
+# Hotmail user's bank mail that reads as `notificaciones@outlook.com`, which is
+# in nobody's trusted set, and every real transaction was rejected.
+_SRS_TOKEN_RE = re.compile(
+    r"(?:^|[<\s])SRS[01][=+-][^@\s>]*@[\w.\-]+\.\w+", re.IGNORECASE)
 _ANY_ADDR_RE = re.compile(r"[\w.+\-]+@[\w.\-]+\.\w+")
 # Headers naming the mailbox that performed the forward, most explicit first.
 _FORWARDER_HEADERS = ("return-path", "x-forwarded-for")
@@ -325,6 +336,12 @@ def _forwarding_account(payload: dict, from_addr: str) -> str | None:
     as the forwarder would reject every real bank notification. The SRS match is
     exempt — it is unambiguously Gmail forwarding on someone's behalf.
 
+    **Non-Gmail auto-forward** resolves to None by design. A standard SRS
+    Return-Path names the forwarding *domain* and no mailbox, and a domain is
+    not an identity — every Hotmail user shares ``outlook.com``, so matching on
+    it would buy nothing a spoofed From doesn't already get. Better to say we
+    can't tell and fail open than to invent an address and reject on it.
+
     Returns None when nothing resolves; the caller treats that as "can't tell"
     and lets the message through rather than risk silently dropping real mail.
     """
@@ -333,6 +350,13 @@ def _forwarding_account(payload: dict, from_addr: str) -> str | None:
             srs = _SRS_RETURN_PATH_RE.search(value)
             if srs:
                 return f"{srs.group(1)}@{srs.group(2)}".lower()
+            if _SRS_TOKEN_RE.search(value):
+                # Skip the value entirely rather than return: a later header may
+                # still name the mailbox, and if none does, the From fallback
+                # below still catches a *manual* forward from a stranger.
+                log.info("%s is SRS-rewritten (%r) — no forwarding mailbox in it",
+                         header, value)
+                continue
             addr = _ANY_ADDR_RE.search(value)
             if addr and not _is_bank_address(addr.group(0)):
                 return addr.group(0).lower()
